@@ -1,0 +1,105 @@
+behaviors:
+  - name: "high-performance"
+    parent: "default"
+    exceptionPolicy: "RETURN_AS_MANY_RESULTS_AS_POSSIBLE"
+    sendKey: true
+    useCompression: true
+    
+    allOperations:
+      abandonCallAfter: "10s"
+      delayBetweenRetries: "5ms"
+      maximumNumberOfCallAttempts: 2
+      replicaOrder: ["MASTER", "ANY_REPLICA"]
+      resetTtlOnReadAtPercent: 0
+      sendKey: true
+      useCompression: true
+      waitForCallToComplete: "500ms"
+      waitForConnectionToComplete: "100ms"
+      waitForSocketResponseAfterCallFails: "50ms"
+    
+    retryableWrites:
+      useDurableDelete: false
+      maximumNumberOfCallAttempts: 2
+      delayBetweenRetries: "5ms"
+    
+    query:
+      recordQueueSize: 10000
+      maxConcurrentServers: 4
+      maximumNumberOfCallAttempts: 3
+
+  - name: "high-reliability"
+    parent: "default"
+    exceptionPolicy: "THROW_ON_ANY_ERROR"
+    sendKey: true
+    useCompression: false
+    
+    allOperations:
+      abandonCallAfter: "60s"
+      delayBetweenRetries: "100ms"
+      maximumNumberOfCallAttempts: 5
+      replicaOrder: ["MASTER", "ANY_REPLICA"]
+      resetTtlOnReadAtPercent: 50
+      sendKey: true
+      useCompression: false
+      waitForCallToComplete: "5s"
+      waitForConnectionToComplete: "1s"
+      waitForSocketResponseAfterCallFails: "500ms"
+    
+    retryableWrites:
+      useDurableDelete: true
+      maximumNumberOfCallAttempts: 5
+      delayBetweenRetries: "100ms"
+    
+    query:
+      recordQueueSize: 1000
+      maxConcurrentServers: 1
+      maximumNumberOfCallAttempts: 10
+
+  - name: "batch-optimized"
+    parent: "high-performance"
+    
+    batchReads:
+      maxConcurrentServers: 8
+      allowInlineMemoryAccess: true
+      allowInlineSsdAccess: true
+    
+    batchWrites:
+      maxConcurrentServers: 8
+      allowInlineMemoryAccess: true
+      allowInlineSsdAccess: true
+
+  - name: "query-optimized"
+    parent: "high-performance"
+    
+    query:
+      recordQueueSize: 20000
+      maxConcurrentServers: 8
+      maximumNumberOfCallAttempts: 2
+
+  - name: "development"
+    parent: "default"
+    exceptionPolicy: "RETURN_AS_MANY_RESULTS_AS_POSSIBLE"
+    sendKey: false
+    useCompression: false
+    
+    allOperations:
+      abandonCallAfter: "5s"
+      delayBetweenRetries: "10ms"
+      maximumNumberOfCallAttempts: 1
+      replicaOrder: ["MASTER"]
+      resetTtlOnReadAtPercent: 0
+      sendKey: false
+      useCompression: false
+      waitForCallToComplete: "1s"
+      waitForConnectionToComplete: "500ms"
+      waitForSocketResponseAfterCallFails: "100ms"
+    
+    retryableWrites:
+      useDurableDelete: false
+      maximumNumberOfCallAttempts: 1
+      delayBetweenRetries: "10ms"
+    
+    query:
+      recordQueueSize: 100
+      maxConcurrentServers: 1
+      maximumNumberOfCallAttempts: 1 
