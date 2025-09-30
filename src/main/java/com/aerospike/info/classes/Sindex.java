@@ -6,8 +6,6 @@ import com.aerospike.info.annotations.Key;
 import com.aerospike.info.annotations.MustMatch;
 import com.aerospike.info.annotations.Named;
 
-import lombok.Data;
-
 public class Sindex {
     @Named("ns")
     @Key

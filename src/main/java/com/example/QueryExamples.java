@@ -45,7 +45,8 @@ public class QueryExamples {
     public static void main(String[] args) {
         try (Cluster cluster = new ClusterDefinition("localhost", 3100)
                 .usingServicesAlternate()
-                .withNativeCredentials(null, null)
+                .withNativeCredentials("admin", "password123")
+                .preferringRacks(1)
                 .withLogLevel(Level.DEBUG)
                 .connect()) {
             
@@ -57,6 +58,22 @@ public class QueryExamples {
                     )
                 ));
 
+//            Behavior newBehavior1 = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
+//                builder.forAllOperations(ops -> ops
+//                    .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
+//                )
+//                .onAvailablityModeReads(ops -> ops
+//                    .waitForCallToComplete(Duration.ofMillis(25))
+//                    .abandonCallAfter(Duration.ofMillis(100))
+//                    .maximumNumberOfCallAttempts(3)
+//                )
+//                .onBatchReads(ops -> ops
+//                    .maximumNumberOfCallAttempts(7)
+//                    .allowInlineMemoryAccess(true)
+//                )
+//            );
+
+            
             Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
                 builder.forAllOperations()
                     .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
@@ -215,7 +232,10 @@ public class QueryExamples {
                 .bin("rooms").onMapKeyRange("room4", "room9").remove()
                 .bin("rooms").onMapKey("room1").onMapKey("rates").onMapKey(1).add(5)
                 .bin("rooms2").mapClear()
-                .bin("rooms2").onMapKey("child", MapOrder.KEY_ORDERED).onListIndex(0, ListOrder.UNORDERED, false).listAdd(5)
+                .bin("rooms2").onMapKey("child", MapOrder.KEY_ORDERED).onMapKey("subChild").setTo(5)
+                // TODO: How to insert an element into a list which doesn't exist?
+                // TODO: Should complex operations return one item per call?
+//                .bin("rooms2").onMapKey("child", MapOrder.KEY_ORDERED).onListIndex(0, ListOrder.UNORDERED, false).listAdd(5)
                 .execute();
             System.out.println(results.getFirst());
             System.out.println(session.query(customerDataSet.id(102)).execute().getFirst());
@@ -342,10 +362,10 @@ public class QueryExamples {
 //                txnSession.insertInto(customerDataSet.id(3)).notInAnyTransaction().execute();
 //            });
             
-            customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectLlist(customerMapper);
+            customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
             System.out.println(customers); 
 
-            customers = session.query(customerDataSet).pageSize(20).execute().toObjectLlist(customerMapper);
+            customers = session.query(customerDataSet).pageSize(20).execute().toObjectList(customerMapper);
             System.out.println(customers);
 
             RecordStream rs = session.query(customerDataSet).pageSize(10).execute();
@@ -366,7 +386,7 @@ public class QueryExamples {
                     .where("$.name == 'Tim' and $.age > 30")
                     .limit(1000)
                     .execute()
-                    .toObjectLlist(customerMapper);
+                    .toObjectList(customerMapper);
             for (Customer customer : customers) {
                 System.out.println(customer);
             }
@@ -378,7 +398,7 @@ public class QueryExamples {
                     .where(Dsl.stringBin("name").eq("Tim").and(Dsl.longBin("age").gt(30)))
                     .limit(1000)
                     .execute()
-                    .toObjectLlist(customerMapper);
+                    .toObjectList(customerMapper);
             for (Customer customer : customers) {
                 System.out.println(customer);
             }
@@ -396,7 +416,7 @@ public class QueryExamples {
                 page = 0;
                 while (recStream.hasMorePages()) {
                     System.out.println("---- Page " + (++page) + " -----");
-                    customers = recStream.toObjectLlist(customerMapper);
+                    customers = recStream.toObjectList(customerMapper);
                     customers.forEach(cust -> System.out.println(cust));
                 }
                 System.out.println("---- End sort ---");
@@ -415,7 +435,7 @@ public class QueryExamples {
                     int pageNum = 0;
                     while (recStream.hasMorePages()) {
                         System.out.println("---- Page " + (++pageNum) + " -----");
-                        List<Customer> custList = recStream.toObjectLlist(customerMapper);
+                        List<Customer> custList = recStream.toObjectList(customerMapper);
                         custList.forEach(cust -> System.out.println(cust));
                     }
                     System.out.println("---- End sort ---");
@@ -429,7 +449,7 @@ public class QueryExamples {
             
             session.delete(customerDataSet.id(999)).execute();
             session.insertInto(customerDataSet).object(sampleCust).execute();
-            Customer readCustomer = session.query(customerDataSet.id(999)).execute().toObjectLlist(customerMapper).get(0);
+            Customer readCustomer = session.query(customerDataSet.id(999)).execute().toObjectList(customerMapper).get(0);
             System.out.println("Customer read back: " + readCustomer);
             System.out.println("--- End object mapping test ----");
             

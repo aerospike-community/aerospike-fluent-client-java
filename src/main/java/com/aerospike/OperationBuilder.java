@@ -307,7 +307,7 @@ public class OperationBuilder {
         if (Log.warnEnabled()) {
             if (ae.getResultCode() == ResultCode.FAIL_FORBIDDEN && expiration > 0) {
                 Log.warn("Operation failed on server with FAIL_FORBIDDEN (22) and the record had "
-                        + "an expiry set in the operation. This is possibly caused by nsup being disableed. "
+                        + "an expiry set in the operation. This is possibly caused by nsup being disabled. "
                         + "See https://aerospike.com/docs/database/reference/error-codes for more information");
             }
             if (ae.getResultCode() == ResultCode.UNSUPPORTED_FEATURE) {

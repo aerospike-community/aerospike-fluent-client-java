@@ -66,6 +66,26 @@ public class Examples_NewStyle {
         session.upsert(key2,key3).bin("name").setTo("Jake").execute();
         System.out.println(session.query(key1, key2, key3, key4).execute());
         System.out.println(session.query(key1).execute());
+        
+        session.upsert(set.id(10))
+            .bin("map").onMapKey("Tim").setTo(312)
+            .bin("map").onMapKey("Bob").setTo(45)
+            .bin("map").onMapKey("Joe").setTo(28)
+            .execute();
+        
+        System.out.println(session.upsert(set.id(10))
+            .bin("map").onMapKeyRange("A", "K").count()
+            .execute());
+        
+        System.out.println(session.upsert(set.id(10))
+                .bin("map").onMapKeyRange("A", "K").countAllOthers()
+                .execute());
+
+        // The below should have a compile error.
+//        System.out.println(session.upsert(set.id(10))
+//                .bin("map").onMapKey("Tim").countAllOthers()
+//                .execute());
+            
 
         long now = System.nanoTime();
         for (int i = 0; i < ITERATIONS; i++) {

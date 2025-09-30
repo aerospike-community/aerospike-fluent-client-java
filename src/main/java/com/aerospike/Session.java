@@ -435,7 +435,7 @@ public class Session {
         List<Key> keyList = new ArrayList<>();
         keyList.add(key1);
         keyList.add(key2);
-        for (Key thisKey : keyList) {
+        for (Key thisKey : keys) {
             keyList.add(thisKey);
         }
         return keyList;

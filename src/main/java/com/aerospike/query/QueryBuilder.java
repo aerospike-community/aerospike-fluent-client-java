@@ -531,7 +531,7 @@ public class QueryBuilder {
      *   <li>Iterating through results: {@link RecordStream#hasNext()}, {@link RecordStream#next()}</li>
      *   <li>Pagination: {@link RecordStream#hasMorePages()}</li>
      *   <li>Sorting: {@link RecordStream#asSortable()}</li>
-     *   <li>Object conversion: {@link RecordStream#toObjectLlist(RecordMapper)}</li>
+     *   <li>Object conversion: {@link RecordStream#toObjectList(RecordMapper)}</li>
      * </ul>
      * 
      * @return a RecordStream containing the query results

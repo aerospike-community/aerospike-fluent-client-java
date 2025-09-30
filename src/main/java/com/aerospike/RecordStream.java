@@ -102,7 +102,7 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
      * @param mapper
      * @return
      */
-    public <T> List<T> toObjectLlist(RecordMapper<T> mapper) {
+    public <T> List<T> toObjectList(RecordMapper<T> mapper) {
         List<T> result = new ArrayList<>();
         while (hasNext()) {
             KeyRecord keyRecord = next();
@@ -140,13 +140,42 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
         }
     }
     
+    public Optional<Record> get(Key key) {
+        while (hasNext()) {
+            KeyRecord kr = next();
+            if (kr.key.equals(key)) {
+                return Optional.of(kr.record);
+            }
+        }
+        return Optional.empty();
+    }
+
+        /**
+         * Find a particular key in the stream and return the data associated with that key, or {@code Optional.empty}
+         * if the key doesn't exist. Note that if the stream is not generated from a {@code Key} or {@code List<Key>}
+         * then finding the key will consume elements in the stream which may not be able to be replayed.
+         * @param <T> - The type of the object to be returned.
+         * @param key - The key of the record
+         * @param mapper - The mapper to use to convert the record to the class
+         * @return An optional containing the data or empty
+         */
+    public <T> Optional<T> get(Key key, RecordMapper<T> mapper) {
+        while (hasNext()) {
+            KeyRecord kr = next();
+            if (kr.key.equals(key)) {
+                return Optional.of(mapper.fromMap(kr.record.bins, kr.key, kr.record.generation));
+            }
+        }
+        return Optional.empty();
+    }
+
     public Optional<KeyRecord> getFirst() {
         if (hasNext()) {
             return Optional.of(next());
         }
         return Optional.empty();
     }
-
+    
     public <T> Optional<T> getFirst(RecordMapper<T> mapper) {
         if (hasNext()) {
             KeyRecord item = next();

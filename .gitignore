@@ -30,6 +30,7 @@ buildNumber.properties
 
 # === Eclipse ===
 .project
+.factorypath
 .classpath
 .settings/
 bin/

@@ -9,13 +9,14 @@ import com.aerospike.client.Log;
 import com.aerospike.client.Value;
 import com.aerospike.client.command.ParticleType;
 import com.aerospike.client.query.Filter;
-import com.aerospike.dsl.DSLParser;
-import com.aerospike.dsl.DSLParserImpl;
 import com.aerospike.dsl.DslParseException;
+import com.aerospike.dsl.ExpressionContext;
 import com.aerospike.dsl.Index;
 import com.aerospike.dsl.IndexContext;
 import com.aerospike.dsl.ParseResult;
 import com.aerospike.dsl.ParsedExpression;
+import com.aerospike.dsl.api.DSLParser;
+import com.aerospike.dsl.impl.DSLParserImpl;
 
 abstract class QueryImpl {
         private final Session session;
@@ -86,13 +87,14 @@ abstract class QueryImpl {
             
             ParsedExpression parseResult;
             IndexContext indexContext = null;
+            ExpressionContext context = ExpressionContext.of(dsl);
             if (allowIndexes) {
                 Set<Index> indexes = session.getCluster().getIndexes();
                 indexContext = IndexContext.of(namespace, indexes);
-                parseResult = parser.parseExpression(dsl, indexContext);
+                parseResult = parser.parseExpression(context, indexContext);
             }
             else {
-                parseResult = parser.parseExpression(dsl);
+                parseResult = parser.parseExpression(context);
             }
             ParseResult result = parseResult.getResult();
             if (result.getExp() == null && result.getFilter() == null) {
