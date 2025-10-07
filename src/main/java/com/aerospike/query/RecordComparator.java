@@ -5,9 +5,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.aerospike.AerospikeComparator;
+import com.aerospike.RecordResult;
 import com.aerospike.client.query.KeyRecord;
 
-public class RecordComparator implements Comparator<KeyRecord>{
+public class RecordComparator implements Comparator<RecordResult>{
     private final List<SortProperties> sortPropertiesList;
     private static final AerospikeComparator aerospikeComparatorCaseSensitive = new AerospikeComparator(true);
     private static final AerospikeComparator aerospikeComparatorCaseInsensitive = new AerospikeComparator(false);;
@@ -59,15 +60,15 @@ public class RecordComparator implements Comparator<KeyRecord>{
         }
     }
     
-    private Map<String, Object> getBins(KeyRecord kr) {
-        if (kr == null || kr.record == null) {
+    private Map<String, Object> getBins(RecordResult kr) {
+        if (kr == null || kr.recordOrNull() == null) {
             return null;
         }
-        return kr.record.bins;
+        return kr.recordOrNull().bins;
     }
     
     @Override
-    public int compare(KeyRecord o1, KeyRecord o2) {
+    public int compare(RecordResult o1, RecordResult o2) {
         return compare(0, getBins(o1), getBins(o2));
     }
 

@@ -1,16 +1,17 @@
 package com.aerospike.query;
 
+import com.aerospike.RecordResult;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.query.KeyRecord;
 
 public class SingleItemRecordStream implements RecordStreamImpl {
-    private final KeyRecord record;
+    private final RecordResult record;
     private boolean read = false;
     private boolean isFirstPage = true;
     
     public SingleItemRecordStream(Key key, Record record) {
-        this.record = new KeyRecord(key, record);
+        this.record = new RecordResult(key, record);
         if (record == null) {
             // no data, mark as read
             this.read = true;
@@ -36,7 +37,7 @@ public class SingleItemRecordStream implements RecordStreamImpl {
     }
 
     @Override
-    public KeyRecord next() {
+    public RecordResult next() {
         return record;
     }
 

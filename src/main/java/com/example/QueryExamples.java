@@ -12,6 +12,7 @@ import java.util.stream.IntStream;
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.DefaultRecordMappingFactory;
+import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.TypeSafeDataSet;
@@ -37,8 +38,8 @@ public class QueryExamples {
     
     public static void print(RecordStream recordStream) {
         while (recordStream.hasNext()) {
-            KeyRecord key = recordStream.next();
-            System.out.printf("Key: %s, Value %s\n", key.key, key.record);
+            RecordResult key = recordStream.next();
+            System.out.printf("Key: %s, Value: %s\n", key.key(), key);
         }
     }
     
@@ -167,7 +168,7 @@ public class QueryExamples {
                     .values("Sam", 24, "brown", new Date().getTime())
                     .expireAllRecordsAfter(Duration.ofDays(30))
                     .execute();
-            values.forEach(kr -> System.out.printf("%s -> %s\n", kr.key, kr.record));
+            values.forEach(kr -> System.out.printf("%s -> %s\n", kr.key(), kr.recordOrThrow()));
 
             for (int i = 0; i < 15; i++) {
                 session.upsert(customerDataSet.id(i))
@@ -327,7 +328,7 @@ public class QueryExamples {
             System.out.println("Read the set, output as stream, limit of 5");
             session.query(customerDataSet).limit(5).execute()
                     .stream()
-                    .map(keyRec -> "Name: " + keyRec.record.getString("name"))
+                    .map(keyRec -> "Name: " + keyRec.recordOrThrow().getString("name"))
                     .forEach(str -> System.out.println(str));
 
             System.out.println("Read header, point read");
@@ -378,7 +379,7 @@ public class QueryExamples {
             int total = session.query(customerDataSet)
                 .execute()
                 .stream()
-                .mapToInt(kr -> kr.record.getInt("quantity"))
+                .mapToInt(kr -> kr.recordOrThrow().getInt("quantity"))
                 .sum();
             System.out.println("\n\nSorting customers by Name with a where clause");
             customers = session.query(customerDataSet)
@@ -457,7 +458,7 @@ public class QueryExamples {
             
             RecordStream data = session.query(customerDataSet.id(999)).execute();
             data.getFirst().ifPresent(keyRecord -> {
-                int generation = keyRecord.record.generation;
+                int generation = keyRecord.recordOrThrow().generation;
                 System.out.println("   Read record with generation of " + generation);
                 session.update(customerDataSet.id(999))
                         .bin("gen").setTo(generation)

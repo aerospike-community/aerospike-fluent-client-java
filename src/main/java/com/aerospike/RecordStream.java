@@ -1,7 +1,6 @@
 package com.aerospike;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -19,6 +18,7 @@ import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
+import com.aerospike.exception.AeroException;
 import com.aerospike.query.FixedSizeRecordStream;
 import com.aerospike.query.RecordStreamImpl;
 import com.aerospike.query.ResettablePagination;
@@ -26,7 +26,7 @@ import com.aerospike.query.SingleItemRecordStream;
 import com.aerospike.query.SortProperties;
 import com.aerospike.query.Sortable;
 
-public class RecordStream implements Iterator<KeyRecord>, Closeable {
+public class RecordStream implements Iterator<RecordResult>, Closeable {
     private final RecordStreamImpl impl;
     public RecordStream() {impl = null;}
     
@@ -65,7 +65,7 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
                 recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
             }
             recordSet.close();
-            impl = new FixedSizeRecordStream(recordList.toArray(new KeyRecord[0]), 0, (int)statement.getMaxRecords(), sortProperties);
+            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), 0, (int)statement.getMaxRecords(), sortProperties);
         }
     }
     
@@ -78,7 +78,7 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
     }
 
     @Override
-    public KeyRecord next() {
+    public RecordResult next() {
         return impl == null ? null : impl.next();
     }
 
@@ -87,8 +87,8 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
      * pagination information, all the records are accessible through the Stream.
      * @return
      */
-    public Stream<KeyRecord> stream() {
-        Stream<KeyRecord> records = StreamSupport.stream(Spliterators.spliteratorUnknownSize(
+    public Stream<RecordResult> stream() {
+        Stream<RecordResult> records = StreamSupport.stream(Spliterators.spliteratorUnknownSize(
                         this, Spliterator.NONNULL | Spliterator.IMMUTABLE), false);
         records.onClose(() -> {
             this.close();
@@ -103,10 +103,13 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
      * @return
      */
     public <T> List<T> toObjectList(RecordMapper<T> mapper) {
+        // TODO: What should happen if there is an exception in the stream of records? At the moment it is just thrown
+        // to the detriment of the other recods
         List<T> result = new ArrayList<>();
         while (hasNext()) {
-            KeyRecord keyRecord = next();
-            result.add(mapper.fromMap(keyRecord.record.bins, keyRecord.key, keyRecord.record.generation));
+            RecordResult keyRecord = next();
+            Record rec = keyRecord.recordOrThrow();
+            result.add(mapper.fromMap(rec.bins, keyRecord.key(), rec.generation));
         }
         return result;
     }
@@ -134,7 +137,7 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
         return Optional.empty();
     }
     
-    public void forEach(Consumer<KeyRecord> consumer) {
+    public void forEach(Consumer<RecordResult> consumer) {
         while (hasNext()) {
             consumer.accept(next());
         }
@@ -142,44 +145,65 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
     
     public Optional<Record> get(Key key) {
         while (hasNext()) {
-            KeyRecord kr = next();
-            if (kr.key.equals(key)) {
-                return Optional.of(kr.record);
+            RecordResult kr = next();
+            if (kr.key().equals(key)) {
+                return Optional.of(kr.recordOrThrow());
             }
         }
         return Optional.empty();
     }
 
-        /**
-         * Find a particular key in the stream and return the data associated with that key, or {@code Optional.empty}
-         * if the key doesn't exist. Note that if the stream is not generated from a {@code Key} or {@code List<Key>}
-         * then finding the key will consume elements in the stream which may not be able to be replayed.
-         * @param <T> - The type of the object to be returned.
-         * @param key - The key of the record
-         * @param mapper - The mapper to use to convert the record to the class
-         * @return An optional containing the data or empty
-         */
-    public <T> Optional<T> get(Key key, RecordMapper<T> mapper) {
+    /**
+     * Find a particular key in the stream and return the data associated with that key, or {@code Optional.empty}
+     * if the key doesn't exist. Note that if the stream is not generated from a {@code Key} or {@code List<Key>}
+     * then finding the key will consume elements in the stream which may not be able to be replayed.
+     * @param <T> - The type of the object to be returned.
+     * @param key - The key of the record
+     * @param mapper - The mapper to use to convert the record to the class
+     * @return An optional containing the data or empty. If the result code is not OK, an exception will be thrown
+     */
+    public <T> Optional<T> get(Key key, RecordMapper<T> mapper) throws AeroException {
         while (hasNext()) {
-            KeyRecord kr = next();
-            if (kr.key.equals(key)) {
-                return Optional.of(mapper.fromMap(kr.record.bins, kr.key, kr.record.generation));
+            RecordResult kr = next();
+            if (kr.key().equals(key)) {
+                Record rec = kr.recordOrThrow();
+                return Optional.of(mapper.fromMap(rec.bins, kr.key(), rec.generation));
             }
         }
         return Optional.empty();
     }
 
-    public Optional<KeyRecord> getFirst() {
+    /**
+     * Get the first element from the stream. If this element failed for any reason, an exception is thrown.
+     * @return the first element in the stream
+     */
+    public Optional<RecordResult> getFirst() throws AeroException {
+        return this.getFirst(true);
+    }
+    
+    /**
+     * Get the first element from the stream. If this element failed for any reason and "throwException" is true,
+     * an appropriate exception is thrown.
+     * @param throwException - If this is true and the resultCode != OK, an exception is thrown. If this is false,
+     * no exception is thrown, but the resultCode() in the response must be consulted to see if the call was successful or not.
+     * @return the first element in the stream
+     */
+    public Optional<RecordResult> getFirst(boolean throwException) {
         if (hasNext()) {
             return Optional.of(next());
         }
         return Optional.empty();
     }
     
+    /**
+     * Get the first element from the stream. If this element failed for any reason, an exception is thrown.
+     * @return the first element in the stream
+     */
     public <T> Optional<T> getFirst(RecordMapper<T> mapper) {
         if (hasNext()) {
-            KeyRecord item = next();
-            return Optional.of(mapper.fromMap(item.record.bins, item.key, item.record.generation));
+            RecordResult item = next();
+            Record rec = item.recordOrThrow();
+            return Optional.of(mapper.fromMap(rec.bins, item.key(), item.recordOrNull().generation));
         }
         return Optional.empty();
     }
@@ -208,9 +232,10 @@ public class RecordStream implements Iterator<KeyRecord>, Closeable {
     }
     public <T> Optional<ObjectWithMetadata<T>> getFirstWithMetadata(RecordMapper<T> mapper) {
         if (hasNext()) {
-            KeyRecord item = next();
-            T object = mapper.fromMap(item.record.bins, item.key, item.record.generation);
-            return Optional.of(new ObjectWithMetadata<T>(object, item.record));
+            RecordResult item = next();
+            Record rec = item.recordOrThrow();
+            T object = mapper.fromMap(rec.bins, item.key(), rec.generation);
+            return Optional.of(new ObjectWithMetadata<T>(object, rec));
         }
         return Optional.empty();
     }

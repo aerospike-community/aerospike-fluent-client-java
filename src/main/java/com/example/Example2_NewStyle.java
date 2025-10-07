@@ -6,14 +6,15 @@ import java.util.Optional;
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.DataSet;
+import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Bin;
 import com.aerospike.client.IAerospikeClient;
 import com.aerospike.client.Key;
+import com.aerospike.client.Record;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.policy.Behavior;
 
 public class Example2_NewStyle {
@@ -44,17 +45,18 @@ public class Example2_NewStyle {
             DataSet customerDataSet = DataSet.of("test", "customer");
             DataSet accountDataSet = DataSet.of("test", "account");
             
-            Optional<KeyRecord> customer = session.query(customerDataSet.id(custId))
+            Optional<RecordResult> customer = session.query(customerDataSet.id(custId))
                     .execute().getFirst();
             
             customer.ifPresent(cust -> {
-                RecordStream accts = session.query(accountDataSet.ids(cust.record.getList("acctIds"))).execute();
-                int sum = accts.stream().mapToInt(keyRecord -> keyRecord.record.getInt("balance")).sum();
+                Record custRec = cust.recordOrThrow();
+                RecordStream accts = session.query(accountDataSet.ids(custRec.getList("acctIds"))).execute();
+                int sum = accts.stream().mapToInt(keyRecord -> keyRecord.recordOrThrow().getInt("balance")).sum();
                 
                 if (sum > 10000) {
                     session.update(customerDataSet.id(custId))
                             .bin("status").setTo("GOLD")
-                            .ensureGenerationIs(cust.record.generation)
+                            .ensureGenerationIs(custRec.generation)
                             .execute();
                 }
             });

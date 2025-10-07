@@ -1,15 +1,14 @@
 package com.aerospike.query;
 
-import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
 
+import com.aerospike.RecordResult;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
-import com.aerospike.client.query.KeyRecord;
 
 public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, ResettablePagination {
-    private final KeyRecord[] records;
+    private final RecordResult[] records;
     private final int pageSize;
     private final int numPages;
     private int currentPage = -1;
@@ -20,15 +19,15 @@ public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, Resett
     public FixedSizeRecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties) {
         this(convertToKeyRecords(keys, records), limit, pageSize, sortProperties);
     }
-    public FixedSizeRecordStream(KeyRecord[] records, long limit, int pageSize, List<SortProperties> sortProperties) {
+    public FixedSizeRecordStream(RecordResult[] records, long limit, int pageSize, List<SortProperties> sortProperties) {
         // TODO: Consider whether to get NULLs back for 
         // a) missing records
         // b) filtered out records.
         // Also need to apply the limit.
         // For now, just filter them out.
         this.records = Arrays.stream(records)
-                .filter(rec -> rec.record != null)
-                .toArray(KeyRecord[]::new);
+                .filter(rec -> rec.recordOrNull() != null)
+                .toArray(RecordResult[]::new);
         this.pageSize = pageSize;
         this.sortInfo = sortProperties;
         applySort();
@@ -37,12 +36,12 @@ public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, Resett
     }
 
     // Called from the constructor, must be static
-    private static KeyRecord[] convertToKeyRecords(Key[] keys, Record[] records) {
-        KeyRecord[] keyRecords = new KeyRecord[keys.length];
+    private static RecordResult[] convertToKeyRecords(Key[] keys, Record[] records) {
+        RecordResult[] recordResults = new RecordResult[keys.length];
         for (int i = 0; i < keys.length; i++) {
-            keyRecords[i] = new KeyRecord(keys[i], records[i]);
+            recordResults[i] = new RecordResult(keys[i], records[i]);
         }
-        return keyRecords;
+        return recordResults;
     }
     private void applySort() {
         if (sortInfo != null && !sortInfo.isEmpty()) {
@@ -86,7 +85,7 @@ public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, Resett
     }
 
     @Override
-    public KeyRecord next() {
+    public RecordResult next() {
         if (index >=0 && index < records.length) {
             return records[index++];
         }

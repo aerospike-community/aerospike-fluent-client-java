@@ -1,7 +1,6 @@
 package com.aerospike;
 
 import com.aerospike.client.policy.QueryPolicy;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
@@ -52,8 +51,8 @@ public class PaginatedRecordStream implements RecordStreamImpl {
     }
     
     @Override
-    public KeyRecord next() {
-        return recordSet.getKeyRecord();
+    public RecordResult next() {
+        return new RecordResult(recordSet.getKeyRecord());
     }
 
     @Override

@@ -44,6 +44,5 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
             }
             throw ae;
         }
-
     }
 }
