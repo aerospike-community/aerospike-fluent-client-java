@@ -17,12 +17,10 @@ import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.TypeSafeDataSet;
 import com.aerospike.client.AerospikeException;
-import com.aerospike.client.Log;
+import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
-import com.aerospike.client.cdt.ListOrder;
 import com.aerospike.client.cdt.MapOrder;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.dsl.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
 import com.aerospike.info.classes.Sindex;
@@ -126,10 +124,12 @@ public class QueryExamples {
             
             session.touch(customerDataSet.ids(1,2,3)).execute();
             
-            session.upsert(customerDataSet.id(80))
+            RecordStream result = session.upsert(customerDataSet.id(80))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(342)
                     .execute();
+            System.out.println(result.getFirst());
+            
             session.upsert(customerDataSet.ids(81, 82))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(343)
@@ -289,11 +289,29 @@ public class QueryExamples {
                 .execute();
             
             // Batch partition filter test
+            List<Key> keys = customerDataSet.ids(IntStream.rangeClosed(20, 44).toArray());
             System.out.println("Read 25 records, but only those in partitions 0->2047");
-            print(session.query(customerDataSet.ids(IntStream.rangeClosed(20, 44).toArray()))
+            print(session.query(keys)
                     .onPartitionRange(0, 2048)
                     .execute());
             
+            System.out.println("Full batch read:");
+            print(session.query(keys).execute());
+            
+            System.out.println("\nBatchRead where name = 'Tim':");
+            print(session.query(keys).where("$.name == 'Tim'").execute());
+            
+            System.out.println("\nBatchRead where name = 'Tim':");
+            print(session.query(keys).respondAllKeys().where("$.name == 'Tim'").execute());
+            
+            System.out.println("\nBatchRead where name = 'Tim':");
+            print(session.query(keys).where("$.name == 'Tim'").respondAllKeys().failOnFilteredOut().execute());
+
+//            System.out.println("Read the set, limit 6, test than respondAllKeys() gives a compile error");
+//            print(session.query(customerDataSet).respondAllKeys().execute());
+//            print(session.query(customerDataSet).failOnFilteredOut().execute());
+            
+
             System.out.println("Read the set, limit 6");
             print(session.query(customerDataSet).limit(6).execute());
             

@@ -1,8 +1,5 @@
 package com.aerospike.query;
 
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.AerospikeException;
@@ -24,15 +21,22 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
     public RecordStream execute() {
         Policy policy = getSession().getBehavior().getMutablePolicy(CommandType.READ_SC);
         policy.txn = this.getQueryBuilder().getTxnToUse();
+        policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();
         if (!getQueryBuilder().isKeyInPartitionRange(key)) {
+            if (this.getQueryBuilder().respondAllKeys) {
+                return new RecordStream(key, null, true);
+            }
             return new RecordStream();
         }
         try {
             if (getQueryBuilder().getWithNoBins()) {
-                return new RecordStream(key, getSession().getClient().getHeader(policy, key));
+                return new RecordStream(key, getSession().getClient().getHeader(policy, key), this.getQueryBuilder().respondAllKeys);
             }
             else {
-                return new RecordStream(key, getSession().getClient().get(policy, key, getQueryBuilder().getBinNames()));
+                return new RecordStream(key, 
+                        getSession().getClient().get(policy, key, getQueryBuilder().getBinNames()),
+                        this.getQueryBuilder().respondAllKeys
+                    );
             }
         }
         catch (AerospikeException ae) {

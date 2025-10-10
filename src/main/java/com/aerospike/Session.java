@@ -12,6 +12,8 @@ import com.aerospike.client.exp.Exp;
 import com.aerospike.client.exp.Expression;
 import com.aerospike.info.InfoCommands;
 import com.aerospike.policy.Behavior;
+import com.aerospike.query.BaseQueryBuilder;
+import com.aerospike.query.KeyBasedQueryBuilderInterface;
 import com.aerospike.query.QueryBuilder;
 
 public class Session {
@@ -444,11 +446,11 @@ public class Session {
     // --------------------------------------------
     // Query functionality
     // --------------------------------------------
-    public QueryBuilder query(DataSet dataSet) {
+    public BaseQueryBuilder<QueryBuilder> query(DataSet dataSet) {
         return new QueryBuilder(this, dataSet);
     }
 
-    public QueryBuilder query(Key key) {
+    public KeyBasedQueryBuilderInterface<QueryBuilder> query(Key key) {
         return new QueryBuilder(this, key);
     }
 
@@ -458,11 +460,11 @@ public class Session {
      * @param keys
      * @return
      */
-    public QueryBuilder query(Key key1, Key key2, Key...keys) {
+    public KeyBasedQueryBuilderInterface<QueryBuilder> query(Key key1, Key key2, Key...keys) {
         return new QueryBuilder(this, buildKeyList(key1, key2, keys));
     }
     
-    public QueryBuilder query(List<Key> keyList) {
+    public KeyBasedQueryBuilderInterface<QueryBuilder> query(List<Key> keyList) {
         return new QueryBuilder(this, keyList);
     }
     

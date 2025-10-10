@@ -39,6 +39,8 @@ class BatchKeyQueryBuilderImpl extends QueryImpl {
         policy.filterExp = whereExp;
 
         long limit = 0;
+        
+        // TODO: Make this work with partition filter and respondAllops
         if (whereExp != null) {
             // We cannot use the limit here as we don't know how many records will match.
             if (hasPartitionFilter()) {
@@ -66,20 +68,23 @@ class BatchKeyQueryBuilderImpl extends QueryImpl {
         }
 
         policy.setTxn(this.getQueryBuilder().getTxnToUse());
+        policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();
         try {
             if (getQueryBuilder().getWithNoBins()) {
                 return new RecordStream(keys, 
                         getSession().getClient().getHeader(policy, keys), 
                         limit,
                         getQueryBuilder().getPageSize(),
-                        getQueryBuilder().getSortInfo());
+                        getQueryBuilder().getSortInfo(),
+                        this.getQueryBuilder().isRespondAllKeys());
             }
             else {
                 return new RecordStream(keys, 
                         getSession().getClient().get(policy, keys, getQueryBuilder().getBinNames()), 
                         limit,
                         getQueryBuilder().getPageSize(),
-                        getQueryBuilder().getSortInfo());
+                        getQueryBuilder().getSortInfo(),
+                        this.getQueryBuilder().isRespondAllKeys());
             }
         }
         catch (AerospikeException ae) {

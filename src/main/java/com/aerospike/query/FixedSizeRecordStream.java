@@ -16,18 +16,19 @@ public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, Resett
     private int index = 0;
     private long limit;
     
-    public FixedSizeRecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties) {
-        this(convertToKeyRecords(keys, records), limit, pageSize, sortProperties);
+    public FixedSizeRecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
+        this(convertToKeyRecords(keys, records), limit, pageSize, sortProperties, respondAllKeys);
     }
-    public FixedSizeRecordStream(RecordResult[] records, long limit, int pageSize, List<SortProperties> sortProperties) {
-        // TODO: Consider whether to get NULLs back for 
-        // a) missing records
-        // b) filtered out records.
-        // Also need to apply the limit.
-        // For now, just filter them out.
-        this.records = Arrays.stream(records)
-                .filter(rec -> rec.recordOrNull() != null)
-                .toArray(RecordResult[]::new);
+    public FixedSizeRecordStream(RecordResult[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
+        // TODO: Apply the limit.
+        if (respondAllKeys) {
+            this.records = records;
+        }
+        else {
+            this.records = Arrays.stream(records)
+                    .filter(rec -> rec.recordOrNull() != null)
+                    .toArray(RecordResult[]::new);
+        }
         this.pageSize = pageSize;
         this.sortInfo = sortProperties;
         applySort();

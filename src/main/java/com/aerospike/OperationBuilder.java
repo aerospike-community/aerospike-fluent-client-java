@@ -300,7 +300,7 @@ public class OperationBuilder {
         
         Key[] keyArray = batchRecords.stream().map(batchRecord -> batchRecord.key).toArray(Key[]::new);
         Record[] recordArray = batchRecords.stream().map(batchRecord -> batchRecord.record).toArray(Record[]::new);
-        return new RecordStream(keyArray, recordArray, 0, 0, null);
+        return new RecordStream(keyArray, recordArray, 0, 0, null, true);
     }
     
     protected void showWarningsOnExceptionAndThrow(AerospikeException ae, Txn txn, Key key, int expiration) {
@@ -334,6 +334,6 @@ public class OperationBuilder {
             }
         }
         
-        return new RecordStream(keyArray, recordArray, 0, 0, null);
+        return new RecordStream(keyArray, recordArray, 0, 0, null, true);
     }
 }

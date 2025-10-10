@@ -321,7 +321,7 @@ public class MultiValueBuilder {
         // TODO: Exception handling!
         Key[] keys = batchRecords.stream().map(batchRecord -> batchRecord.key).toArray(Key[]::new);
         Record[] records = batchRecords.stream().map(batchRecord -> batchRecord.record).toArray(Record[]::new);
-        return new RecordStream(keys, records, 0, 0, null);
+        return new RecordStream(keys, records, 0, 0, null, true);
     }
     
     private RecordStream executeViaSingleOperations() {
@@ -365,7 +365,7 @@ public class MultiValueBuilder {
         // TODO: need to handle exceptions
         // TODO: If we use REPLACE we get write_master: modify op can't have record-level replace flag 1693171444c19e9c821d842b806388566df2949d
         // Raise with Brian N?
-        return new RecordStream(keys, records, 0, 0, null);
+        return new RecordStream(keys, records, 0, 0, null, true);
     }
 
 } 

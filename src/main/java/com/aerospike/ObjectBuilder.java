@@ -105,7 +105,7 @@ public class ObjectBuilder<T> {
                 operations
             );
                 
-        return new RecordStream(key, record);
+        return new RecordStream(key, record, true);
     }
     
     public RecordStream execute() {
@@ -141,6 +141,6 @@ public class ObjectBuilder<T> {
             records[i] = batchWrites.get(i).record;
         }
         // TODO: consider limit here
-        return new RecordStream(keys, records,0 , 0, null);
+        return new RecordStream(keys, records,0 , 0, null, true);
     }
 }

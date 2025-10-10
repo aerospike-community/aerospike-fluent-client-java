@@ -8,9 +8,11 @@ import com.aerospike.RecordMapper;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Key;
+import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.cluster.Partition;
 import com.aerospike.dsl.BooleanExpression;
+
 
 /**
  * Builder class for constructing and executing queries against Aerospike.
@@ -56,7 +58,7 @@ import com.aerospike.dsl.BooleanExpression;
  * @see SortDir
  * @see SortProperties
  */
-public class QueryBuilder {
+public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder> {
     private final QueryImpl implementation;
     private String[] binNames = null;
     private boolean withNoBins = false;
@@ -64,6 +66,8 @@ public class QueryBuilder {
     private int pageSize = 0;
     private int startPartition = 0;
     private int endPartition = 4096;
+    protected boolean respondAllKeys = false;
+    protected boolean failOnFilteredOut = false;
     String dslString = null;
     private BooleanExpression dsl = null;
     private List<SortProperties> sortInfo = null;
@@ -336,6 +340,37 @@ public class QueryBuilder {
         }
         this.sortInfo.add(new SortProperties(field, sortDir, caseSensitive));
         return this;
+    }
+    
+    /**
+     * If the query has a `where` clause and is provided either a single key or a list of keys,
+     * any records which are filtered out will appear in the
+     * stream against an exception code of {@link ResultCode.FILTERED_OUT} rather than just not 
+     * appearing in the result stream.
+     * @return this QueryBuilder for method chaining
+     */
+    public QueryBuilder failOnFilteredOut() {
+        this.failOnFilteredOut = true;
+        return this;
+    }
+    
+    protected boolean isFailOnFilteredOut() {
+        return this.failOnFilteredOut;
+    }
+    
+    /**
+     * By default, if a key is provided (or is part of a list of keys) but the key does not map to a record
+     * then nothing will be returned in the stream against that key. However, if this flag is specified, {@code null} will be
+     * in the stream again that key.
+     * @return this QueryBuilder for method chaining
+     */
+    public QueryBuilder respondAllKeys() {
+        this.respondAllKeys = true;
+        return this;
+    }
+    
+    protected boolean isRespondAllKeys() {
+        return this.respondAllKeys;
     }
     
     /**

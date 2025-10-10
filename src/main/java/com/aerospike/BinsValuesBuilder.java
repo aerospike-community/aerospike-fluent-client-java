@@ -266,11 +266,11 @@ public class BinsValuesBuilder {
         }
         batchPolicy.txn = this.txnToUse;
         
-        boolean result = opBuilder.getSession().getClient().operate(batchPolicy, batchRecords);
+        opBuilder.getSession().getClient().operate(batchPolicy, batchRecords);
         
         Key[] keyArray = batchRecords.stream().map(batchRecord -> batchRecord.key).toArray(Key[]::new);
         Record[] recordArray = batchRecords.stream().map(batchRecord -> batchRecord.record).toArray(Record[]::new);
-        return new RecordStream(keyArray, recordArray, 0, 0, null);
+        return new RecordStream(keyArray, recordArray, 0, 0, null, true);
     }
     
     protected RecordStream executeIndividual() {
@@ -294,7 +294,7 @@ public class BinsValuesBuilder {
             }
         }
         
-        return new RecordStream(keyArray, recordArray, 0, 0, null);
+        return new RecordStream(keyArray, recordArray, 0, 0, null, true);
     }
 
 } 

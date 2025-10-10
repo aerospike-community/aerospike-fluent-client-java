@@ -30,11 +30,11 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
     private final RecordStreamImpl impl;
     public RecordStream() {impl = null;}
     
-    public RecordStream(Key key, Record record) {
-        impl = new SingleItemRecordStream(key, record);
+    public RecordStream(Key key, Record record, boolean respondAllKeys) {
+        impl = new SingleItemRecordStream(key, record, respondAllKeys);
     }
-    public RecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties) {
-        impl = new FixedSizeRecordStream(keys, records, limit, pageSize, sortProperties);
+    public RecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
+        impl = new FixedSizeRecordStream(keys, records, limit, pageSize, sortProperties, respondAllKeys);
     }
     
     public RecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
@@ -65,7 +65,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
                 recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
             }
             recordSet.close();
-            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), 0, (int)statement.getMaxRecords(), sortProperties);
+            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), 0, (int)statement.getMaxRecords(), sortProperties, false);
         }
     }
     
