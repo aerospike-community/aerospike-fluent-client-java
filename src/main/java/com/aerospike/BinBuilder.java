@@ -171,6 +171,89 @@ public class BinBuilder extends AbstractCdtBuilder{
     public CdtActionInvertableBuilder onMapValueRange(long startIncl, long endExcl) {
         return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl)));
     }
+    
+    /**
+     * Navigate to map items by key relative to index range.
+     * Server selects map items nearest to key and greater by index.
+     * 
+     * @param key the reference key
+     * @param index the relative index offset
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(long key, int index) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_REL_INDEX_RANGE, Value.get(key), index));
+    }
+    
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(String key, int index) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_REL_INDEX_RANGE, Value.get(key), index));
+    }
+    
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(byte[] key, int index) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_REL_INDEX_RANGE, Value.get(key), index));
+    }
+    
+    /**
+     * Navigate to map items by key relative to index range with count limit.
+     * Server selects map items nearest to key and greater by index with a count limit.
+     * 
+     * @param key the reference key
+     * @param index the relative index offset
+     * @param count the maximum number of items to select
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(long key, int index, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_REL_INDEX_RANGE, Value.get(key), index, count));
+    }
+    
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(String key, int index, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_REL_INDEX_RANGE, Value.get(key), index, count));
+    }
+    
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(byte[] key, int index, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_REL_INDEX_RANGE, Value.get(key), index, count));
+    }
+    
+    /**
+     * Navigate to map items by value relative to rank range.
+     * Server selects map items nearest to value and greater by relative rank.
+     * 
+     * @param value the reference value
+     * @param rank the relative rank offset
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(long value, int rank) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank));
+    }
+    
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(String value, int rank) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank));
+    }
+    
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank));
+    }
+    
+    /**
+     * Navigate to map items by value relative to rank range with count limit.
+     * Server selects map items nearest to value and greater by relative rank with a count limit.
+     * 
+     * @param value the reference value
+     * @param rank the relative rank offset
+     * @param count the maximum number of items to select
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(long value, int rank, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank, count));
+    }
+    
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(String value, int rank, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank, count));
+    }
+    
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank, count));
+    }
+    
     public CdtContextNonInvertableBuilder onListIndex(int index) {
         return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.LIST_BY_INDEX, index));
     }
