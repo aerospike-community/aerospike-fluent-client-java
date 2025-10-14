@@ -90,7 +90,7 @@ public class ObjectBuilder<T> {
         return this;
     }
     
-    private long getExpirationInSecondAndCheckValue(Date date) {
+    private long getExpirationInSecondsAndCheckValue(Date date) {
         long expirationInSeconds = (date.getTime() - new Date().getTime())/ 1000L;
         if (expirationInSeconds < 0) {
             throw new IllegalArgumentException("Expiration must be set in the future, not to " + date);
@@ -107,11 +107,11 @@ public class ObjectBuilder<T> {
      * @throws IllegalArgumentException if the date is in the past
      */
     public ObjectBuilder<T> expireRecordAt(Date date) {
-        this.expirationInSeconds = getExpirationInSecondAndCheckValue(date);
+        this.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
 
-    private long getExpirationInSecondAndCheckValue(LocalDateTime date) {
+    private long getExpirationInSecondsAndCheckValue(LocalDateTime date) {
         LocalDateTime now = LocalDateTime.now();
         long expirationInSeconds = ChronoUnit.SECONDS.between(now, date);
         if (expirationInSeconds < 0) {
@@ -129,7 +129,7 @@ public class ObjectBuilder<T> {
      * @throws IllegalArgumentException if the date is in the past
      */
     public ObjectBuilder<T> expireRecordAt(LocalDateTime date) {
-        this.expirationInSeconds = getExpirationInSecondAndCheckValue(date);
+        this.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
@@ -140,7 +140,7 @@ public class ObjectBuilder<T> {
      * @return This ObjectBuilder for method chaining
      */
     public ObjectBuilder<T> withNoChangeInExpiration() {
-        this.expirationInSeconds = -2;
+        this.expirationInSeconds = OperationBuilder.TTL_NO_CHANGE;
         return this;
     }
     
@@ -151,7 +151,7 @@ public class ObjectBuilder<T> {
      * @return This ObjectBuilder for method chaining
      */
     public ObjectBuilder<T> neverExpire() {
-        this.expirationInSeconds = -1;
+        this.expirationInSeconds = OperationBuilder.TTL_NEVER_EXPIRE;
         return this;
     }
     
@@ -162,7 +162,7 @@ public class ObjectBuilder<T> {
      * @return This ObjectBuilder for method chaining
      */
     public ObjectBuilder<T> expiryFromServerDefault() {
-        this.expirationInSeconds = 0;
+        this.expirationInSeconds = OperationBuilder.TTL_SERVER_DEFAULT;
         return this;
     }
     
@@ -217,7 +217,7 @@ public class ObjectBuilder<T> {
         if (elements.size() <= 1) {
             throw new IllegalStateException("expireAllRecordsAt() is only available when multiple objects are specified");
         }
-        this.expirationInSecondsForAll = getExpirationInSecondAndCheckValue(dateTime);
+        this.expirationInSecondsForAll = getExpirationInSecondsAndCheckValue(dateTime);
         return this;
     }
 
@@ -236,7 +236,7 @@ public class ObjectBuilder<T> {
         if (elements.size() <= 1) {
             throw new IllegalStateException("expireAllRecordsAt() is only available when multiple objects are specified");
         }
-        this.expirationInSecondsForAll = getExpirationInSecondAndCheckValue(date);
+        this.expirationInSecondsForAll = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
@@ -253,7 +253,7 @@ public class ObjectBuilder<T> {
         if (elements.size() <= 1) {
             throw new IllegalStateException("neverExpireAllRecords() is only available when multiple objects are specified");
         }
-        this.expirationInSecondsForAll = -1;
+        this.expirationInSecondsForAll = OperationBuilder.TTL_NEVER_EXPIRE;
         return this;
     }
     
@@ -270,7 +270,7 @@ public class ObjectBuilder<T> {
         if (elements.size() <= 1) {
             throw new IllegalStateException("withNoChangeInExpirationForAllRecords() is only available when multiple objects are specified");
         }
-        this.expirationInSecondsForAll = -2;
+        this.expirationInSecondsForAll = OperationBuilder.TTL_NO_CHANGE;
         return this;
     }
     
@@ -287,7 +287,7 @@ public class ObjectBuilder<T> {
         if (elements.size() <= 1) {
             throw new IllegalStateException("expiryFromServerDefaultForAllRecords() is only available when multiple objects are specified");
         }
-        this.expirationInSecondsForAll = 0;
+        this.expirationInSecondsForAll = OperationBuilder.TTL_SERVER_DEFAULT;
         return this;
     }
     

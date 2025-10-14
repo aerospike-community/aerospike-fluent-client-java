@@ -55,6 +55,21 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     public static final int BATCH_OPERATION_THRESHOLD = 10;
     
     /**
+     * TTL constant: Record never expires (TTL = -1)
+     */
+    public static final int TTL_NEVER_EXPIRE = -1;
+    
+    /**
+     * TTL constant: Do not change the current TTL of the record (TTL = -2)
+     */
+    public static final int TTL_NO_CHANGE = -2;
+    
+    /**
+     * TTL constant: Use the server's default TTL for the namespace (TTL = 0)
+     */
+    public static final int TTL_SERVER_DEFAULT = 0;
+    
+    /**
      * Returns the threshold for determining when to use batch operations vs individual operations.
      * Operations with item counts >= this threshold will use batch mode.
      * Operations with item counts < this threshold will use individual parallel execution.
@@ -167,7 +182,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         return this;
     }
     
-    protected long getExpirationInSecondAndCheckValue(Date date) {
+    protected long getExpirationInSecondsAndCheckValue(Date date) {
         long expirationInSeconds = (date.getTime() - new Date().getTime())/ 1000L;
         if (expirationInSeconds < 0) {
             throw new IllegalArgumentException("Expiration must be set in the future, not to " + date);
@@ -176,11 +191,11 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     }
     
     public OperationBuilder expireRecordAt(Date date) {
-        this.expirationInSeconds = getExpirationInSecondAndCheckValue(date);
+        this.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
 
-    protected long getExpirationInSecondAndCheckValue(LocalDateTime date) {
+    protected long getExpirationInSecondsAndCheckValue(LocalDateTime date) {
         LocalDateTime now = LocalDateTime.now();
         long expirationInSeconds = ChronoUnit.SECONDS.between(now, date);
         if (expirationInSeconds < 0) {
@@ -191,22 +206,22 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     
 
     public OperationBuilder expireRecordAt(LocalDateTime date) {
-        this.expirationInSeconds = getExpirationInSecondAndCheckValue(date);
+        this.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
     public OperationBuilder withNoChangeInExpiration() {
-        this.expirationInSeconds = -2;
+        this.expirationInSeconds = TTL_NO_CHANGE;
         return this;
     }
     
     public OperationBuilder neverExpire() {
-        this.expirationInSeconds = -1;
+        this.expirationInSeconds = TTL_NEVER_EXPIRE;
         return this;
     }
     
     public OperationBuilder expiryFromServerDefault() {
-        this.expirationInSeconds = 0;
+        this.expirationInSeconds = TTL_SERVER_DEFAULT;
         return this;
     }
     
@@ -261,7 +276,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         if (!isMultiKey()) {
             throw new IllegalStateException("expireAllRecordsAt() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = getExpirationInSecondAndCheckValue(dateTime);
+        this.expirationInSecondsForAll = getExpirationInSecondsAndCheckValue(dateTime);
         return this;
     }
 
@@ -280,7 +295,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         if (!isMultiKey()) {
             throw new IllegalStateException("expireAllRecordsAt() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = getExpirationInSecondAndCheckValue(date);
+        this.expirationInSecondsForAll = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
@@ -297,7 +312,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         if (!isMultiKey()) {
             throw new IllegalStateException("neverExpireAllRecords() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = -1;
+        this.expirationInSecondsForAll = TTL_NEVER_EXPIRE;
         return this;
     }
     
@@ -314,7 +329,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         if (!isMultiKey()) {
             throw new IllegalStateException("withNoChangeInExpirationForAllRecords() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = -2;
+        this.expirationInSecondsForAll = TTL_NO_CHANGE;
         return this;
     }
     
@@ -331,7 +346,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         if (!isMultiKey()) {
             throw new IllegalStateException("expiryFromServerDefaultForAllRecords() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = 0;
+        this.expirationInSecondsForAll = TTL_SERVER_DEFAULT;
         return this;
     }
     
@@ -502,7 +517,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         // Use batch operations if 10 or more keys
         if (keys.size() >= getBatchOperationThreshold()) {
             BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
-            batchPolicy.txn= wp.txn;
+            batchPolicy.txn = wp.txn;
             BatchWritePolicy bwp = new BatchWritePolicy();
             bwp.expiration = wp.expiration;
             bwp.generation = wp.generation;
@@ -547,7 +562,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         // Use batch operations if 10 or more keys
         if (keys.size() >= getBatchOperationThreshold()) {
             BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
-            batchPolicy.txn= wp.txn;
+            batchPolicy.txn = wp.txn;
             BatchWritePolicy bwp = new BatchWritePolicy();
             bwp.expiration = wp.expiration;
             bwp.generation = wp.generation;

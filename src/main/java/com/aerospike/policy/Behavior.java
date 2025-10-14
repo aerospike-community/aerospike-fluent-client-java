@@ -55,7 +55,7 @@ public class Behavior {
                             .waitForConnectionToComplete(Duration.ofSeconds(0))
                             .waitForSocketResponseAfterCallFails(Duration.ofSeconds(0))
                         )
-                        .onAvailablityModeReads(ops -> ops
+                        .onAvailabilityModeReads(ops -> ops
                             .migrationReadConsistency(ReadModeAP.ALL)
                         )
                         .onBatchReads(ops -> ops
@@ -258,10 +258,10 @@ public class Behavior {
     }
     
     /**
-     * Create a new policy from the existing policy. This will inherit all the behaviour of the parent from
+     * Create a new policy from the existing policy. This will inherit all the behavior of the parent from
      * which it is derived, but can then override whichever aspects it likes.
      * <p/>
-     * Once a policy has been created, it is immutatable <b>except</b> for changes made by reloads the policies
+     * Once a policy has been created, it is immutable <b>except</b> for changes made by reloads the policies
      * via dynamic config.
      * <p/>
      * For example:
@@ -281,8 +281,8 @@ public class Behavior {
      * 
      * This will create a new behavior with the specified values set.
      * @param newName - the name of this policy, as specifiable in the dynamic config file
-     * @param changer - The behavior changer used form a new behavior.
-     * @return The new behaviour
+     * @param changer - The behavior changer used to form a new behavior.
+     * @return The new behavior
      */
     public Behavior deriveWithChanges(String newName, BehaviorChanger changer) {
         Behavior result = new Behavior(newName);
@@ -377,7 +377,7 @@ public class Behavior {
     
     /**
      * Get the policy of the appropriate type from this behavior. This will aggregate all the information on this 
-     * behavior (the specific requested type, plus the "All" type), ascending up the superclass behaviour tree
+     * behavior (the specific requested type, plus the "All" type), ascending up the superclass behavior tree
      * until it reaches the root level, then the policy is formed.
      * <p/>
      * The results are cached, so this traversal will only occur on the first time the policy is used after the
@@ -450,8 +450,8 @@ public class Behavior {
                 );
         });
         
-        for (Behavior behaviour : Behavior.getAllBehaviors()) {
-            System.out.println(behaviour.getName());
+        for (Behavior behavior : Behavior.getAllBehaviors()) {
+            System.out.println(behavior.getName());
         }
         Behavior.startMonitoring("/Users/tfaulkes/Programming/Aerospike/git/new-client-api/src/main/resources/behavior-example.yml");
         WritePolicy pol = Behavior.DEFAULT.getSharedPolicy(CommandType.WRITE_RETRYABLE);
@@ -470,8 +470,8 @@ public class Behavior {
         InfoPolicy infoPol = beh3.getSharedInfoPolicy();
         System.out.println(infoPol.timeout);
 
-        for (Behavior behaviour : Behavior.getAllBehaviors()) {
-            System.out.println(behaviour.getName());
+        for (Behavior behavior : Behavior.getAllBehaviors()) {
+            System.out.println(behavior.getName());
         }
 
         Behavior highPerformance = Behavior.getBehavior("high-performance");

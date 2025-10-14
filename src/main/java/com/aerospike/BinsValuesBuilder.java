@@ -127,31 +127,31 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
     
     public BinsValuesBuilder expireRecordAt(Date date) {
         checkValuesExist("expireRecordAfter");
-        current.expirationInSeconds = opBuilder.getExpirationInSecondAndCheckValue(date);
+        current.expirationInSeconds = opBuilder.getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
     public BinsValuesBuilder expireRecordAt(LocalDateTime date) {
         checkValuesExist("expireRecordAfter");
-        current.expirationInSeconds = opBuilder.getExpirationInSecondAndCheckValue(date);
+        current.expirationInSeconds = opBuilder.getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
     public BinsValuesBuilder withNoChangeInExpiration() {
         checkValuesExist("expireRecordAfter");
-        current.expirationInSeconds = -2;
+        current.expirationInSeconds = OperationBuilder.TTL_NO_CHANGE;
         return this;
     }
     
     public BinsValuesBuilder neverExpire() {
         checkValuesExist("expireRecordAfter");
-        current.expirationInSeconds = -1;
+        current.expirationInSeconds = OperationBuilder.TTL_NEVER_EXPIRE;
         return this;
     }
     
     public BinsValuesBuilder expiryFromServerDefault() {
         checkValuesExist("expireRecordAfter");
-        current.expirationInSeconds = 0;
+        current.expirationInSeconds = OperationBuilder.TTL_SERVER_DEFAULT;
         return this;
     }
     
@@ -186,7 +186,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         if (!opBuilder.isMultiKey()) {
             throw new IllegalStateException("expireAllRecordsAt() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = opBuilder.getExpirationInSecondAndCheckValue(dateTime);
+        this.expirationInSecondsForAll = opBuilder.getExpirationInSecondsAndCheckValue(dateTime);
         return this;
     }
 
@@ -194,7 +194,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         if (!opBuilder.isMultiKey()) {
             throw new IllegalStateException("expireAllRecordsAt() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = opBuilder.getExpirationInSecondAndCheckValue(date);
+        this.expirationInSecondsForAll = opBuilder.getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
@@ -202,7 +202,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         if (!opBuilder.isMultiKey()) {
             throw new IllegalStateException("neverExpireAllRecords() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = -1;
+        this.expirationInSecondsForAll = OperationBuilder.TTL_NEVER_EXPIRE;
         return this;
     }
     
@@ -210,7 +210,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         if (!opBuilder.isMultiKey()) {
             throw new IllegalStateException("withNoChangeInExpirationForAllRecords() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = -2;
+        this.expirationInSecondsForAll = OperationBuilder.TTL_NO_CHANGE;
         return this;
     }
     
@@ -218,7 +218,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         if (!opBuilder.isMultiKey()) {
             throw new IllegalStateException("expiryFromServerDefaultForAllRecords() is only available when multiple keys are specified");
         }
-        this.expirationInSecondsForAll = 0;
+        this.expirationInSecondsForAll = OperationBuilder.TTL_SERVER_DEFAULT;
         return this;
     }
     

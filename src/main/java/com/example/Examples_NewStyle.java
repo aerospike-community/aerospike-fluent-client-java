@@ -30,7 +30,7 @@ public class Examples_NewStyle {
         Cluster connection = new ClusterDefinition("localhost", 3100).connect();
 
         Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder ->
-            builder.onAvailablityModeReads(ops -> ops
+            builder.onAvailabilityModeReads(ops -> ops
                 .abandonCallAfter(Duration.ofSeconds(3))
             )
         );

@@ -22,7 +22,6 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.cdt.MapOrder;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.dsl.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
 import com.aerospike.info.classes.Sindex;
@@ -64,7 +63,7 @@ public class QueryExamples {
                 builder.forAllOperations(ops -> ops
                     .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
                 )
-                .onAvailablityModeReads(ops -> ops
+                .onAvailabilityModeReads(ops -> ops
                     .waitForCallToComplete(Duration.ofMillis(25))
                     .abandonCallAfter(Duration.ofMillis(100))
                     .maximumNumberOfCallAttempts(3)
@@ -79,7 +78,7 @@ public class QueryExamples {
                     .allowInlineSsdAccess(true)
                     .maxConcurrentServers(5)
                 )
-                .onAvailablityModeReads(ops -> ops
+                .onAvailabilityModeReads(ops -> ops
                     .maximumNumberOfCallAttempts(8)
                 )
             );

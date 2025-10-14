@@ -177,7 +177,7 @@ public class MultiValueBuilder {
         
         for (RecordValues thisValue : this.valueSets) {
             if (thisValue.expirationInSeconds == Long.MIN_VALUE) {
-                thisValue.expirationInSeconds = -2;
+                thisValue.expirationInSeconds = OperationBuilder.TTL_NO_CHANGE;
             }
         }
         
@@ -189,7 +189,7 @@ public class MultiValueBuilder {
         
         for (RecordValues thisValue : this.valueSets) {
             if (thisValue.expirationInSeconds == Long.MIN_VALUE) {
-                thisValue.expirationInSeconds = -1;
+                thisValue.expirationInSeconds = OperationBuilder.TTL_NEVER_EXPIRE;
             }
         }
         
@@ -201,7 +201,7 @@ public class MultiValueBuilder {
         
         for (RecordValues thisValue : this.valueSets) {
             if (thisValue.expirationInSeconds == Long.MIN_VALUE) {
-                thisValue.expirationInSeconds = 0;
+                thisValue.expirationInSeconds = OperationBuilder.TTL_SERVER_DEFAULT;
             }
         }
         return this;
@@ -278,7 +278,7 @@ public class MultiValueBuilder {
         long expirationInSeconds = values.expirationInSeconds;
         if (expirationInSeconds == Long.MIN_VALUE) {
             // Hasn't been set, use the default
-            expirationInSeconds = 0;
+            expirationInSeconds = OperationBuilder.TTL_SERVER_DEFAULT;
         }
         if (expirationInSeconds > (long)Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;

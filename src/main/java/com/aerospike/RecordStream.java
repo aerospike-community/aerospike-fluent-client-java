@@ -215,10 +215,10 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      */
     public <T> Optional<T> get(Key key, RecordMapper<T> mapper) throws AeroException {
         while (hasNext()) {
-            RecordResult kr = next();
-            if (kr.key().equals(key)) {
-                Record rec = kr.recordOrThrow();
-                return Optional.of(mapper.fromMap(rec.bins, kr.key(), rec.generation));
+            RecordResult thisRecord = next();
+            if (thisRecord.key().equals(key)) {
+                Record rec = thisRecord.recordOrThrow();
+                return Optional.of(mapper.fromMap(rec.bins, thisRecord.key(), rec.generation));
             }
         }
         return Optional.empty();

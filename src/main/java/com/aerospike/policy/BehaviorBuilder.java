@@ -25,7 +25,7 @@ public class BehaviorBuilder {
     SettableConsistencyModeReadPolicy.Builder onConsistencyModeReads() {
         return new SettableConsistencyModeReadPolicy.Builder(this, CommandType.READ_SC);
     }
-    SettableAvailabilityModeReadPolicy.Builder onAvailablityModeReads() {
+    SettableAvailabilityModeReadPolicy.Builder onAvailabilityModeReads() {
         return new SettableAvailabilityModeReadPolicy.Builder(this, CommandType.READ_AP);
     }
     SettableWritePolicy.Builder onRetryableWrites() {
@@ -60,8 +60,8 @@ public class BehaviorBuilder {
         return builder.done();
     }
     
-    public BehaviorBuilder onAvailablityModeReads(Consumer<SettableAvailabilityModeReadPolicy.Builder> configurator) {
-        SettableAvailabilityModeReadPolicy.Builder builder = onAvailablityModeReads();
+    public BehaviorBuilder onAvailabilityModeReads(Consumer<SettableAvailabilityModeReadPolicy.Builder> configurator) {
+        SettableAvailabilityModeReadPolicy.Builder builder = onAvailabilityModeReads();
         configurator.accept(builder);
         return builder.done();
     }
