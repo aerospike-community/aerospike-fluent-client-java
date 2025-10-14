@@ -6,7 +6,6 @@ import java.util.Map;
 
 import com.aerospike.AerospikeComparator;
 import com.aerospike.RecordResult;
-import com.aerospike.client.query.KeyRecord;
 
 public class RecordComparator implements Comparator<RecordResult>{
     private final List<SortProperties> sortPropertiesList;

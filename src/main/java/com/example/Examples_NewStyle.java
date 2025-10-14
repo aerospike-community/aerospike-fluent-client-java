@@ -4,18 +4,14 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
-import com.aerospike.DSLPath;
 import com.aerospike.DataSet;
 import com.aerospike.OperationBuilder;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
-import com.aerospike.metadata.NamespaceInfo;
 import com.aerospike.policy.Behavior;
 
 public class Examples_NewStyle {

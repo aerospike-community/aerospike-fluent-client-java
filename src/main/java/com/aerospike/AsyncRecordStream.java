@@ -112,7 +112,6 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
                     next = END;
                     throw re;
                 }
-                @SuppressWarnings("unchecked")
                 RecordResult rr = (RecordResult) next;
                 next = fetch();
                 return rr;

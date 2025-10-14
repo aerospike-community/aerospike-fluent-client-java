@@ -1,5 +1,6 @@
 package com.aerospike.query;
 
+import com.aerospike.RecordMapper;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Txn;

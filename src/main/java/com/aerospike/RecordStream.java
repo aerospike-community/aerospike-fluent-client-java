@@ -16,7 +16,6 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.policy.QueryPolicy;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;

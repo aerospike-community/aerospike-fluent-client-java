@@ -3,7 +3,6 @@ package com.aerospike;
 import java.util.List;
 import java.util.Map;
 
-import com.aerospike.CdtGetOrRemoveBuilder.CdtOperation;
 import com.aerospike.client.Value;
 import com.aerospike.client.cdt.ListOperation;
 import com.aerospike.client.cdt.ListOrder;

@@ -40,7 +40,6 @@ public class ClusterDefinition {
     private int[] preferrredRacks;
     private boolean useServicesAlternate = false;
     private Level logLevel = Level.WARN;
-    private Callback callback = null;
     TlsBuilder tlsBuilder = null;
     
     private final Host[] hosts;
