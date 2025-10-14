@@ -65,10 +65,10 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         else {
             // Sortable record sets must use the array implementation, so fetch all records
             int count = 0;
-            List<KeyRecord> recordList = new ArrayList<>();
+            List<RecordResult> recordList = new ArrayList<>();
             while (count < limit && !filter.isDone()) {
                 while (count < limit && recordSet.next()) {
-                    recordList.add(recordSet.getKeyRecord());
+                    recordList.add(new RecordResult(recordSet.getKeyRecord()));
                     count++;
                 }
                 recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
@@ -241,7 +241,12 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      */
     public Optional<RecordResult> getFirst(boolean throwException) {
         if (hasNext()) {
-            return Optional.of(next());
+            if (throwException) {
+                return Optional.of(next().orThrow());
+            }
+            else {
+                return Optional.of(next());
+            }
         }
         return Optional.empty();
     }
@@ -254,7 +259,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         if (hasNext()) {
             RecordResult item = next();
             Record rec = item.recordOrThrow();
-            return Optional.of(mapper.fromMap(rec.bins, item.key(), item.recordOrNull().generation));
+            return Optional.of(mapper.fromMap(rec.bins, item.key(), item.recordOrThrow().generation));
         }
         return Optional.empty();
     }

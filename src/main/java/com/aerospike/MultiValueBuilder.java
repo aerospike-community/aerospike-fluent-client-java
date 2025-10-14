@@ -266,7 +266,7 @@ public class MultiValueBuilder {
                 keys.size()));
         }
         
-        if (valueSets.size() >= 10) {
+        if (valueSets.size() >= OperationBuilder.getBatchOperationThreshold()) {
             return executeViaBatch();
         }
         else {

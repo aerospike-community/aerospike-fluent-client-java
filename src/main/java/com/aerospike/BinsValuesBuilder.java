@@ -356,7 +356,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
                 valueSets.size(), opBuilder.getNumKeys()));
         }
         
-        if (keys.size() >= 10) {
+        if (keys.size() >= OperationBuilder.getBatchOperationThreshold()) {
             return executeBatch();
         }
         else {
@@ -394,7 +394,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
                 valueSets.size(), opBuilder.getNumKeys()));
         }
         
-        if (keys.size() >= 10) {
+        if (keys.size() >= OperationBuilder.getBatchOperationThreshold()) {
             return executeBatch();
         }
         else {
@@ -463,7 +463,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
     }
     
     /**
-     * Execute operations synchronously for individual keys (< 10 keys).
+     * Execute operations synchronously for individual keys (< batch threshold).
      * All virtual threads are joined before returning.
      */
     protected RecordStream executeIndividualSync() {
@@ -551,7 +551,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
     }
     
     /**
-     * Execute operations asynchronously for individual keys (< 10 keys).
+     * Execute operations asynchronously for individual keys (< batch threshold).
      * Returns immediately; virtual threads complete in background.
      */
     protected RecordStream executeIndividualAsync() {

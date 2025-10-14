@@ -325,10 +325,17 @@ public class QueryExamples {
             print(session.query(customerDataSet).limit(6).execute());
             
             List<Key> keyList2 = customerDataSet.ids(20,21,22,23,24,25,26,27);
-            session.update(keyList2)
+            RecordStream thisStream = session.update(keyList2)
                    .bin("age").add(1)
-                   .execute();
+                   .executeAsync();
+            
+            System.out.println("Showing results before guaranteeing execution has finished.");
             print(session.query(keyList2).execute());
+            System.out.println("Showing async results");
+            print(thisStream);
+            System.out.println("Showing results now execution has finished.");
+            print(session.query(keyList2).execute());
+            
 
             System.out.printf("Update people in list whose age is < 35 (%s)\n", keyList2);
             print(session.update(keyList2)

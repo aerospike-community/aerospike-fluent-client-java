@@ -29,10 +29,18 @@ public record RecordResult(Key key, Record recordOrNull, int resultCode, boolean
         return this.resultCode == ResultCode.OK;
     }
     
-    public Record recordOrThrow() {
+    /**
+     * If this result contains an error, then throw the appropriate exception, otherwise return this object
+     */
+    public RecordResult orThrow() {
         if (!isOk()) {
             throw AeroException.resultCodeToException(resultCode, message(), inDoubt);
         }
+        return this;
+    }
+    
+    public Record recordOrThrow() {
+        orThrow();
         return recordOrNull;
     }
 }

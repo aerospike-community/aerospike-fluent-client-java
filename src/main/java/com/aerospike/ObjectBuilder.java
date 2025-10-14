@@ -494,7 +494,7 @@ public class ObjectBuilder<T> {
             return executeSingle(elements.get(0));
         }
         
-        if (elements.size() < 10) {
+        if (elements.size() < OperationBuilder.getBatchOperationThreshold()) {
             return executeIndividualSync();
         }
         
@@ -529,7 +529,7 @@ public class ObjectBuilder<T> {
             return executeSingleAsync(elements.get(0));
         }
         
-        if (elements.size() < 10) {
+        if (elements.size() < OperationBuilder.getBatchOperationThreshold()) {
             return executeIndividualAsync();
         }
         
@@ -537,7 +537,7 @@ public class ObjectBuilder<T> {
     }
     
     /**
-     * Execute operations synchronously for individual objects (2-9 objects).
+     * Execute operations synchronously for individual objects (< batch threshold).
      * All virtual threads are joined before returning.
      */
     private RecordStream executeIndividualSync() {
@@ -608,7 +608,7 @@ public class ObjectBuilder<T> {
     }
     
     /**
-     * Execute operations asynchronously for individual objects (2-9 objects).
+     * Execute operations asynchronously for individual objects (< batch threshold).
      * Returns immediately; virtual threads complete in background.
      */
     private RecordStream executeIndividualAsync() {

@@ -16,6 +16,7 @@ import com.aerospike.client.BatchRecord;
 import com.aerospike.client.BatchWrite;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
+import com.aerospike.client.Record;
 import com.aerospike.client.Log;
 import com.aerospike.client.Operation;
 import com.aerospike.client.ResultCode;
@@ -45,6 +46,24 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     protected WhereClauseProcessor dsl = null;
     protected boolean respondAllKeys = false;
     protected boolean failOnFilteredOut = false;
+    
+    /**
+     * The threshold for determining when to use batch operations vs individual operations.
+     * Operations with item counts >= this threshold will use batch mode.
+     * Operations with item counts < this threshold will use individual parallel execution.
+     */
+    public static final int BATCH_OPERATION_THRESHOLD = 10;
+    
+    /**
+     * Returns the threshold for determining when to use batch operations vs individual operations.
+     * Operations with item counts >= this threshold will use batch mode.
+     * Operations with item counts < this threshold will use individual parallel execution.
+     * 
+     * @return the batch operation threshold
+     */
+    public static int getBatchOperationThreshold() {
+        return BATCH_OPERATION_THRESHOLD;
+    }
     
     public static boolean areOperationsRetryable(Operation[] operations) {
         for (Operation operation : operations) {
@@ -481,7 +500,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         wp.txn = this.txnToUse;
         
         // Use batch operations if 10 or more keys
-        if (keys.size() >= 10) {
+        if (keys.size() >= getBatchOperationThreshold()) {
             BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
             batchPolicy.txn= wp.txn;
             BatchWritePolicy bwp = new BatchWritePolicy();
@@ -526,7 +545,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         wp.txn = this.txnToUse;
         
         // Use batch operations if 10 or more keys
-        if (keys.size() >= 10) {
+        if (keys.size() >= getBatchOperationThreshold()) {
             BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
             batchPolicy.txn= wp.txn;
             BatchWritePolicy bwp = new BatchWritePolicy();
@@ -610,7 +629,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
             AsyncRecordStream asyncStream) {
         
         try {
-            com.aerospike.client.Record record = session.getClient().operate(wp, key, operations);
+            Record record = session.getClient().operate(wp, key, operations);
             if (respondAllKeys || record != null) {
                 asyncStream.publish(new RecordResult(key, record));
             }
@@ -628,7 +647,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     }
 
     /**
-     * Execute operations synchronously for individual keys (< 10 keys).
+     * Execute operations synchronously for individual keys (< batch threshold).
      * All virtual threads are joined before returning.
      */
     protected RecordStream executeIndividualSync(WritePolicy wp, Operation[] operations) {
@@ -644,7 +663,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     }
     
     /**
-     * Execute operations asynchronously for individual keys (< 10 keys).
+     * Execute operations asynchronously for individual keys (< batch threshold).
      * Returns immediately; virtual threads complete in background.
      */
     protected RecordStream executeIndividualAsync(WritePolicy wp, Operation[] operations) {
@@ -673,9 +692,9 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
             List<BatchRecord> records = new ArrayList<>();
             Key key = keysToProcess.get(0);
             try {
-                com.aerospike.client.Record record = session.getClient().operate(wp, key, operations);
-                if (respondAllKeys || record != null) {
-                    records.add(new BatchRecord(key, record, true));
+                Record result = session.getClient().operate(wp, key, operations);
+                if (respondAllKeys || result != null) {
+                    records.add(new BatchRecord(key, result, true));
                 }
             } catch (AerospikeException ae) {
                 if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
@@ -699,7 +718,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
                 try {
                     // Execute operation and collect result
                     try {
-                        com.aerospike.client.Record record = session.getClient().operate(wp, key, operations);
+                        Record record = session.getClient().operate(wp, key, operations);
                         if (respondAllKeys || record != null) {
                             allRecords.add(new BatchRecord(key, record, true));
                         }
