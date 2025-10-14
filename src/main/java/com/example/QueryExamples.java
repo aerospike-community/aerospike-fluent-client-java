@@ -11,6 +11,7 @@ import java.util.stream.IntStream;
 
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
+import com.aerospike.DataSet;
 import com.aerospike.DefaultRecordMappingFactory;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
@@ -21,6 +22,7 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.cdt.MapOrder;
+import com.aerospike.client.query.KeyRecord;
 import com.aerospike.dsl.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
 import com.aerospike.info.classes.Sindex;
@@ -58,44 +60,28 @@ public class QueryExamples {
                     )
                 ));
 
-//            Behavior newBehavior1 = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
-//                builder.forAllOperations(ops -> ops
-//                    .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
-//                )
-//                .onAvailablityModeReads(ops -> ops
-//                    .waitForCallToComplete(Duration.ofMillis(25))
-//                    .abandonCallAfter(Duration.ofMillis(100))
-//                    .maximumNumberOfCallAttempts(3)
-//                )
-//                .onBatchReads(ops -> ops
-//                    .maximumNumberOfCallAttempts(7)
-//                    .allowInlineMemoryAccess(true)
-//                )
-//            );
-
-            
             Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
-                builder.forAllOperations()
+                builder.forAllOperations(ops -> ops
                     .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
-                .done()
-                .onAvailablityModeReads()
+                )
+                .onAvailablityModeReads(ops -> ops
                     .waitForCallToComplete(Duration.ofMillis(25))
                     .abandonCallAfter(Duration.ofMillis(100))
                     .maximumNumberOfCallAttempts(3)
-                .done()
-                .onBatchReads()
+                )
+                .onBatchReads(ops -> ops
                     .maximumNumberOfCallAttempts(7)
                     .allowInlineMemoryAccess(true)
-                .done()
+                )
             );
             Behavior childBehavior = newBehavior.deriveWithChanges("child", builder -> 
-                builder.onBatchWrites()
+                builder.onBatchWrites(ops -> ops
                     .allowInlineSsdAccess(true)
                     .maxConcurrentServers(5)
-                .done()
-                .onAvailablityModeReads()
+                )
+                .onAvailablityModeReads(ops -> ops
                     .maximumNumberOfCallAttempts(8)
-                .done()
+                )
             );
                 
             TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
@@ -125,6 +111,10 @@ public class QueryExamples {
             
             session.touch(customerDataSet.ids(1,2,3)).execute();
             
+            
+            DataSet users = DataSet.of("test", "users");
+            Key key = users.id("alice");
+
             RecordStream result = session.upsert(customerDataSet.id(80))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(342)

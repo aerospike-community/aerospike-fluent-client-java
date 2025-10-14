@@ -43,7 +43,7 @@ public class Behavior {
     public static final Behavior DEFAULT 
             = new Behavior("default",
                     new BehaviorBuilder()
-                        .forAllOperations()
+                        .forAllOperations(ops -> ops
                             .abandonCallAfter(Duration.ofSeconds(30))
                             .delayBetweenRetries(Duration.ofMillis(0))
                             .maximumNumberOfCallAttempts(1)
@@ -54,39 +54,38 @@ public class Behavior {
                             .waitForCallToComplete(Duration.ofSeconds(1))
                             .waitForConnectionToComplete(Duration.ofSeconds(0))
                             .waitForSocketResponseAfterCallFails(Duration.ofSeconds(0))
-                        .done()
-                        .onAvailablityModeReads()
+                        )
+                        .onAvailablityModeReads(ops -> ops
                             .migrationReadConsistency(ReadModeAP.ALL)
-                        .done()
-                        .onBatchReads()
+                        )
+                        .onBatchReads(ops -> ops
                             .maxConcurrentServers(1)
                             .allowInlineMemoryAccess(true)
                             .allowInlineSsdAccess(false)
-                        .done()
-                        .onBatchWrites() 
+                        )
+                        .onBatchWrites(ops -> ops
                             .allowInlineMemoryAccess(true)
                             .allowInlineSsdAccess(false)
                             .maxConcurrentServers(1)
-                        .done()
-                        .onConsistencyModeReads()
+                        )
+                        .onConsistencyModeReads(ops -> ops
                             .readConsistency(ReadModeSC.SESSION)
-                        .done()
-                        .onInfo()
+                        )
+                        .onInfo(ops -> ops
                             .abandonCallAfter(Duration.ofSeconds(1))
-                        .done()
-                        .onNonRetryableWrites()
+                        )
+                        .onNonRetryableWrites(ops -> ops
                             .useDurableDelete(false)
-                        .done()
-                        .onQuery()
+                        )
+                        .onQuery(ops -> ops
                             .recordQueueSize(5000)
                             .maxConcurrentServers(0)
                             .maximumNumberOfCallAttempts(6)
-                        .done()
-                        .onRetryableWrites()
+                        )
+                        .onRetryableWrites(ops -> ops
                             .useDurableDelete(false)
                             .maximumNumberOfCallAttempts(3)
-                        .done()
-                    ,
+                        ),
                     ExceptionPolicy.RETURN_AS_MANY_RESULTS_AS_POSSIBLE);
     
     
@@ -269,14 +268,14 @@ public class Behavior {
      * <pre>
      * Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("writeTest", builder -> {
      *    builder
-     *       .forAllOperations()
+     *       .forAllOperations(ops -> ops
      *           .resetTtlOnReadAtPercent(67)
      *           .useCompression(true)
-     *       .done()
-     *       .onRetryableWrites()
+     *       )
+     *       .onRetryableWrites(ops -> ops
      *           .delayBetweenRetries(Duration.ofMillis(25))
      *           .maximumNumberOfCallAttempts(7)
-     *       .done();
+     *       );
      * });
      * </pre>
      * 
@@ -424,32 +423,31 @@ public class Behavior {
     public static void main(String[] args) throws Exception {
         Behavior beh = Behavior.DEFAULT.deriveWithChanges("writeTest", builder -> {
             builder
-                .forAllOperations()
+                .forAllOperations(ops -> ops
                     .resetTtlOnReadAtPercent(67)
                     .useCompression(true)
-                .done()
-                .onRetryableWrites()
+                )
+                .onRetryableWrites(ops -> ops
                     .delayBetweenRetries(Duration.ofMillis(37))
                     .maximumNumberOfCallAttempts(7)
-                .done()
-            ;
+                );
         });
         
         Behavior beh2 = beh.deriveWithChanges("writeChild", builder -> {
             builder
-                .onRetryableWrites()
+                .onRetryableWrites(ops -> ops
                     .delayBetweenRetries(Duration.ofMillis(23))
-                .done();
+                );
         });
         Behavior beh3 = beh.deriveWithChanges("writeChild2", builder -> {
             builder
-                .forAllOperations()
+                .forAllOperations(ops -> ops
                     .delayBetweenRetries(Duration.ofMillis(13))
                     .abandonCallAfter(Duration.ofSeconds(5))
-                .done()
-                .onInfo()
+                )
+                .onInfo(ops -> ops
                     .abandonCallAfter(Duration.ofSeconds(3))
-                .done();
+                );
         });
         
         for (Behavior behaviour : Behavior.getAllBehaviors()) {
