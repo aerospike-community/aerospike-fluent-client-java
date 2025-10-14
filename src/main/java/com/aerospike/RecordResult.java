@@ -1,5 +1,6 @@
 package com.aerospike;
 
+import com.aerospike.client.BatchRecord;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
@@ -18,6 +19,10 @@ public record RecordResult(Key key, Record recordOrNull, int resultCode, boolean
     
     public RecordResult(KeyRecord keyRecord) {
         this(keyRecord.key, keyRecord.record, ResultCode.OK, false, null);
+    }
+    
+    public RecordResult(BatchRecord batchRecord) {
+        this(batchRecord.key, batchRecord.record, batchRecord.resultCode, batchRecord.inDoubt, ResultCode.getResultString(batchRecord.resultCode));
     }
     
     public boolean isOk() {

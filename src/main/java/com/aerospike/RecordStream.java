@@ -11,8 +11,10 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import com.aerospike.client.BatchRecord;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
+import com.aerospike.client.ResultCode;
 import com.aerospike.client.policy.QueryPolicy;
 import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.query.PartitionFilter;
@@ -35,6 +37,13 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
     }
     public RecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
         impl = new FixedSizeRecordStream(keys, records, limit, pageSize, sortProperties, respondAllKeys);
+    }
+    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties) {
+        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties);
+    }
+    
+    public RecordStream(AsyncRecordStream asyncStream) {
+        impl = asyncStream;
     }
     
     public RecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
@@ -94,6 +103,48 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
             this.close();
         });
         return records;
+    }
+    
+    /**
+     * Filter the stream to return only failed operations. A failed operation is one where
+     * the result code is not {@link ResultCode#OK}.
+     * <p>
+     * This method consumes the current stream and returns a new RecordStream containing
+     * only the records with non-OK result codes. Useful for error handling and debugging.
+     * <p>
+     * Example usage:
+     * <pre>
+     * RecordStream results = session.update(keys).bin("name").setTo("value").execute();
+     * RecordStream failures = results.failures();
+     * failures.forEach(failure -> {
+     *     System.err.println("Failed for key: " + failure.key() + 
+     *                        ", reason: " + failure.message());
+     * });
+     * </pre>
+     * 
+     * @return A new RecordStream containing only records with resultCode != OK
+     */
+    public RecordStream failures() {
+        List<BatchRecord> failedRecords = new ArrayList<>();
+        
+        while (this.hasNext()) {
+            RecordResult result = this.next();
+            if (result.resultCode() != ResultCode.OK) {
+                // Convert RecordResult to BatchRecord for FixedSizeRecordStream
+                BatchRecord br = new BatchRecord(
+                    result.key(), 
+                    result.recordOrNull(), 
+                    result.resultCode(), 
+                    result.inDoubt(), 
+                    true
+                );
+                failedRecords.add(br);
+            }
+        }
+        
+        // Return new RecordStream with filtered results
+        // Using limit=0, pageSize=0, sortProperties=null for simple filtering
+        return new RecordStream(failedRecords, 0, 0, null);
     }
     
     /**

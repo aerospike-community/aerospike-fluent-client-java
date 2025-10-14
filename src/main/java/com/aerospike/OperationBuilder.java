@@ -6,6 +6,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.aerospike.client.AerospikeException;
@@ -15,24 +18,33 @@ import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
 import com.aerospike.client.Log;
 import com.aerospike.client.Operation;
-import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
+import com.aerospike.client.exp.Exp;
+import com.aerospike.client.exp.Expression;
 import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
+import com.aerospike.dsl.BooleanExpression;
+import com.aerospike.dsl.ParseResult;
 import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.query.PreparedDsl;
+import com.aerospike.query.WhereClauseProcessor;
 
-public class OperationBuilder {
+public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     private final List<Key> keys;
     protected final List<Operation> ops = new ArrayList<>();
     protected final OpType opType;
     protected final Session session;
     protected int generation = 0;
     protected long expirationInSeconds = 0;   // Default, get value from server
+    protected long expirationInSecondsForAll = 0;
     protected Txn txnToUse;
+    protected WhereClauseProcessor dsl = null;
+    protected boolean respondAllKeys = false;
+    protected boolean failOnFilteredOut = false;
     
     public static boolean areOperationsRetryable(Operation[] operations) {
         for (Operation operation : operations) {
@@ -179,6 +191,131 @@ public class OperationBuilder {
         return this;
     }
     
+    /**
+     * Set the expiration for all records in this operation relative to the current time.
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @param duration The duration after which all records should expire
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     */
+    public OperationBuilder expireAllRecordsAfter(Duration duration) {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("expireAllRecordsAfter() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = duration.getSeconds();
+        return this;
+    }
+    
+    /**
+     * Set the expiration for all records in this operation relative to the current time.
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @param seconds The number of seconds after which all records should expire
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     */
+    public OperationBuilder expireAllRecordsAfterSeconds(long seconds) {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("expireAllRecordsAfterSeconds() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = seconds;
+        return this;
+    }
+    
+    /**
+     * Set the expiration for all records in this operation to an absolute date/time.
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @param dateTime The date/time at which all records should expire
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     * @throws IllegalArgumentException if the date is in the past
+     */
+    public OperationBuilder expireAllRecordsAt(LocalDateTime dateTime) {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("expireAllRecordsAt() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = getExpirationInSecondAndCheckValue(dateTime);
+        return this;
+    }
+
+    /**
+     * Set the expiration for all records in this operation to an absolute date/time.
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @param date The date at which all records should expire
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     * @throws IllegalArgumentException if the date is in the past
+     */
+    public OperationBuilder expireAllRecordsAt(Date date) {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("expireAllRecordsAt() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = getExpirationInSecondAndCheckValue(date);
+        return this;
+    }
+    
+    /**
+     * Set all records to never expire (TTL = -1).
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     */
+    public OperationBuilder neverExpireAllRecords() {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("neverExpireAllRecords() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = -1;
+        return this;
+    }
+    
+    /**
+     * Do not change the expiration of any records (TTL = -2).
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     */
+    public OperationBuilder withNoChangeInExpirationForAllRecords() {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("withNoChangeInExpirationForAllRecords() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = -2;
+        return this;
+    }
+    
+    /**
+     * Use the server's default expiration for all records (TTL = 0).
+     * This applies to all keys unless overridden by individual record expiration settings.
+     * <p>
+     * Note: This method is only available when multiple keys are specified.
+     * 
+     * @return This OperationBuilder for method chaining
+     * @throws IllegalStateException if called when only a single key is specified
+     */
+    public OperationBuilder expiryFromServerDefaultForAllRecords() {
+        if (!isMultiKey()) {
+            throw new IllegalStateException("expiryFromServerDefaultForAllRecords() is only available when multiple keys are specified");
+        }
+        this.expirationInSecondsForAll = 0;
+        return this;
+    }
+    
     protected Txn getTxnToUse() {
         return this.txnToUse;
     }
@@ -254,13 +391,93 @@ public class OperationBuilder {
         }
         result.recordExistsAction = recordExistsActionFromOpType(opType);
         return result;
-    }    
+    }
     
+    private void setWhereClause(WhereClauseProcessor clause) {
+        if (this.dsl == null) {
+            this.dsl = clause;
+        }
+        else {
+            throw new IllegalArgumentException("Only one 'where' clause can be specified. There is already one of '%s' and another is being set to '%s'"
+                    .formatted(this.dsl, clause));
+        }
+    }
+    
+    @Override
+    public OperationBuilder where(String dsl, Object ... params) {
+        WhereClauseProcessor impl;
+        if (dsl == null || dsl.isEmpty()) {
+            impl = null;
+        }
+        else if (params.length == 0) {
+            impl = WhereClauseProcessor.from(false, dsl);
+        }
+        else {
+            impl = WhereClauseProcessor.from(false, String.format(dsl, params));
+        }
+        setWhereClause(impl);
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder where(BooleanExpression dsl) {
+        setWhereClause(WhereClauseProcessor.from(dsl));
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder where(PreparedDsl dsl, Object ... params) {
+        setWhereClause(WhereClauseProcessor.from(false, dsl, params));
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder where(Exp exp) {
+        setWhereClause(WhereClauseProcessor.from(exp));
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder failOnFilteredOut() {
+        this.failOnFilteredOut = true;
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder respondAllKeys() {
+        this.respondAllKeys = true;
+        return this;
+    }
+    
+    /**
+     * Execute operations with default behavior (synchronous).
+     * All operations complete before this method returns, making it safe for transactions.
+     * 
+     * @return RecordStream containing the results
+     */
     public RecordStream execute() {
+        return executeSync();
+    }
+    
+    /**
+     * Execute operations synchronously. All operations complete before this method returns.
+     * <p>
+     * Operations are parallelized using virtual threads, but all threads are joined before
+     * returning. This ensures transaction safety and deterministic behavior.
+     * 
+     * @return RecordStream containing the results
+     */
+    public RecordStream executeSync() {
+        if (Log.debugEnabled()) {
+            Log.debug("OperationBuilder.executeSync() called for " + keys.size() + " key(s), transaction: " + 
+                     (txnToUse != null ? "yes" : "no"));
+        }
+        
         Operation[] operations = ops.toArray(new Operation[0]);
         boolean retryable = OperationBuilder.areOperationsRetryable(operations);
         WritePolicy wp = getWritePolicy(retryable, generation, opType);
-        wp.expiration = getExpirationAsInt(expirationInSeconds);
+        long effectiveExpiration = (expirationInSeconds != 0) ? expirationInSeconds : expirationInSecondsForAll;
+        wp.expiration = getExpirationAsInt(effectiveExpiration);
         wp.txn = this.txnToUse;
         
         // Use batch operations if 10 or more keys
@@ -273,7 +490,52 @@ public class OperationBuilder {
             bwp.generationPolicy = wp.generationPolicy;
             return executeBatch(batchPolicy, operations, bwp);
         } else {
-            return executeIndividual(wp, operations);
+            return executeIndividualSync(wp, operations);
+        }
+    }
+    
+    /**
+     * Execute operations asynchronously using virtual threads for parallel execution.
+     * Method returns immediately; results are consumed via the RecordStream.
+     * <p>
+     * <b>WARNING:</b> Using this in transactions may lead to operations still being in flight
+     * when commit() is called, potentially leading to inconsistent state. A warning will be logged.
+     * 
+     * @return RecordStream that will be populated as results arrive
+     */
+    public RecordStream executeAsync() {
+        if (Log.debugEnabled()) {
+            Log.debug("OperationBuilder.executeAsync() called for " + keys.size() + " key(s), transaction: " + 
+                     (txnToUse != null ? "yes" : "no"));
+        }
+        
+        if (txnToUse != null && Log.warnEnabled()) {
+            Log.warn(
+                "executeAsync() called within a transaction. " +
+                "Async operations may still be in flight when commit() is called, " +
+                "which could lead to inconsistent state. " +
+                "Consider using executeSync() or execute() for transactional safety."
+            );
+        }
+        
+        Operation[] operations = ops.toArray(new Operation[0]);
+        boolean retryable = OperationBuilder.areOperationsRetryable(operations);
+        WritePolicy wp = getWritePolicy(retryable, generation, opType);
+        long effectiveExpiration = (expirationInSeconds != 0) ? expirationInSeconds : expirationInSecondsForAll;
+        wp.expiration = getExpirationAsInt(effectiveExpiration);
+        wp.txn = this.txnToUse;
+        
+        // Use batch operations if 10 or more keys
+        if (keys.size() >= 10) {
+            BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+            batchPolicy.txn= wp.txn;
+            BatchWritePolicy bwp = new BatchWritePolicy();
+            bwp.expiration = wp.expiration;
+            bwp.generation = wp.generation;
+            bwp.generationPolicy = wp.generationPolicy;
+            return executeBatch(batchPolicy, operations, bwp);
+        } else {
+            return executeIndividualAsync(wp, operations);
         }
     }
     
@@ -292,18 +554,37 @@ public class OperationBuilder {
     protected RecordStream executeBatch(BatchPolicy batchPolicy, Operation[] operations, BatchWritePolicy batchWritePolicy) {
         batchPolicy.txn = this.txnToUse;
         
+        // Apply where clause if present
+        Expression whereExp = null;
+        if (this.dsl != null && !keys.isEmpty()) {
+            ParseResult parseResult = this.dsl.process(keys.get(0).namespace, session);
+            whereExp = Exp.build(parseResult.getExp());
+        }
+        batchPolicy.filterExp = whereExp;
+        batchPolicy.failOnFilteredOut = this.failOnFilteredOut;
+        
         List<BatchRecord> batchRecords = keys.stream()
                 .map(key -> new BatchWrite(batchWritePolicy, key, operations))
                 .collect(Collectors.toList());
         
-        boolean result = session.getClient().operate(batchPolicy, batchRecords);
+        session.getClient().operate(batchPolicy, batchRecords);
         
-        Key[] keyArray = batchRecords.stream().map(batchRecord -> batchRecord.key).toArray(Key[]::new);
-        Record[] recordArray = batchRecords.stream().map(batchRecord -> batchRecord.record).toArray(Record[]::new);
-        return new RecordStream(keyArray, recordArray, 0, 0, null, true);
+        // Handle respondAllKeys and filterExp behavior
+        if (!respondAllKeys && whereExp != null) {
+            // Remove any items which have been filtered out or not found
+            batchRecords.removeIf(br -> (br.resultCode == ResultCode.OK && br.record == null) 
+                    || (br.resultCode == ResultCode.KEY_NOT_FOUND_ERROR)
+                    || (br.resultCode == ResultCode.FILTERED_OUT && !failOnFilteredOut));
+        }
+        
+        return new RecordStream(batchRecords, 0, 0, null);
     }
     
     protected void showWarningsOnExceptionAndThrow(AerospikeException ae, Txn txn, Key key, int expiration) {
+        showWarningsOnException(ae, txn, key, expiration);
+        throw ae;
+    }
+    protected void showWarningsOnException(AerospikeException ae, Txn txn, Key key, int expiration) {
         if (Log.warnEnabled()) {
             if (ae.getResultCode() == ResultCode.FAIL_FORBIDDEN && expiration > 0) {
                 Log.warn("Operation failed on server with FAIL_FORBIDDEN (22) and the record had "
@@ -317,23 +598,163 @@ public class OperationBuilder {
                 }
             }
         }
-        throw ae;
     }
-    protected RecordStream executeIndividual(WritePolicy wp, Operation[] operations) {
-        Key[] keyArray = new Key[keys.size()];
-        Record[] recordArray = new Record[keys.size()];
+    /**
+     * Execute a single operation and publish the result to the async stream.
+     * Handles filtering, error handling, and respondAllKeys logic.
+     */
+    protected void executeAndPublishSingleOperation(
+            WritePolicy wp, 
+            Key key, 
+            Operation[] operations,
+            AsyncRecordStream asyncStream) {
         
-        for (int i = 0; i < keys.size(); i++) {
-            Key key = keys.get(i);
-            try {
-                Record record = session.getClient().operate(wp, key, operations);
-                keyArray[i] = key;
-                recordArray[i] = record;
-            } catch (AerospikeException ae) {
-                showWarningsOnExceptionAndThrow(ae, txnToUse, key, wp.expiration);
+        try {
+            com.aerospike.client.Record record = session.getClient().operate(wp, key, operations);
+            if (respondAllKeys || record != null) {
+                asyncStream.publish(new RecordResult(key, record));
+            }
+        } catch (AerospikeException ae) {
+            if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
+                if (failOnFilteredOut || respondAllKeys) {
+                    asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode())));
+                }
+                // Otherwise skip this record
+            } else {
+                showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode())));
             }
         }
+    }
+
+    /**
+     * Execute operations synchronously for individual keys (< 10 keys).
+     * All virtual threads are joined before returning.
+     */
+    protected RecordStream executeIndividualSync(WritePolicy wp, Operation[] operations) {
+        // Apply where clause if present
+        Expression whereExp = null;
+        if (this.dsl != null && !keys.isEmpty()) {
+            ParseResult parseResult = this.dsl.process(keys.get(0).namespace, session);
+            whereExp = Exp.build(parseResult.getExp());
+        }
+        wp.filterExp = whereExp;
         
-        return new RecordStream(keyArray, recordArray, 0, 0, null, true);
+        return executeIndividualParallelSync(wp, operations, keys);
+    }
+    
+    /**
+     * Execute operations asynchronously for individual keys (< 10 keys).
+     * Returns immediately; virtual threads complete in background.
+     */
+    protected RecordStream executeIndividualAsync(WritePolicy wp, Operation[] operations) {
+        // Apply where clause if present
+        Expression whereExp = null;
+        if (this.dsl != null && !keys.isEmpty()) {
+            ParseResult parseResult = this.dsl.process(keys.get(0).namespace, session);
+            whereExp = Exp.build(parseResult.getExp());
+        }
+        wp.filterExp = whereExp;
+        
+        return executeIndividualParallelAsync(wp, operations, keys);
+    }
+    
+    /**
+     * Execute operations in parallel using virtual threads, JOINING all threads before return.
+     * Guarantees all operations complete (successfully or exceptionally) before returning.
+     */
+    protected RecordStream executeIndividualParallelSync(
+            WritePolicy wp, 
+            Operation[] operations,
+            List<Key> keysToProcess) {
+        
+        // Single key: synchronous execution (no threads needed)
+        if (keysToProcess.size() == 1) {
+            List<BatchRecord> records = new ArrayList<>();
+            Key key = keysToProcess.get(0);
+            try {
+                com.aerospike.client.Record record = session.getClient().operate(wp, key, operations);
+                if (respondAllKeys || record != null) {
+                    records.add(new BatchRecord(key, record, true));
+                }
+            } catch (AerospikeException ae) {
+                if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
+                    if (failOnFilteredOut || respondAllKeys) {
+                        records.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
+                    }
+                } else {
+                    showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                    records.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
+                }
+            }
+            return new RecordStream(records, 0, 0, null);
+        }
+        
+        // Multiple keys: parallel execution with virtual threads, JOINED before return
+        List<BatchRecord> allRecords = new CopyOnWriteArrayList<>();
+        CountDownLatch latch = new CountDownLatch(keysToProcess.size());
+        
+        for (Key key : keysToProcess) {
+            Thread.startVirtualThread(() -> {
+                try {
+                    // Execute operation and collect result
+                    try {
+                        com.aerospike.client.Record record = session.getClient().operate(wp, key, operations);
+                        if (respondAllKeys || record != null) {
+                            allRecords.add(new BatchRecord(key, record, true));
+                        }
+                    } catch (AerospikeException ae) {
+                        if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
+                            if (failOnFilteredOut || respondAllKeys) {
+                                allRecords.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
+                            }
+                        } else {
+                            showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                            allRecords.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
+                        }
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        // WAIT for all threads to complete
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting for operations to complete", e);
+        }
+        
+        return new RecordStream(allRecords, 0, 0, null);
+    }
+    
+    /**
+     * Execute operations in parallel using virtual threads, WITHOUT joining.
+     * Returns immediately with AsyncRecordStream; threads complete in background.
+     */
+    protected RecordStream executeIndividualParallelAsync(
+            WritePolicy wp, 
+            Operation[] operations,
+            List<Key> keysToProcess) {
+        
+        // Even single key: use async execution with virtual thread
+        AsyncRecordStream asyncStream = new AsyncRecordStream(keysToProcess.size());
+        AtomicInteger pendingOps = new AtomicInteger(keysToProcess.size());
+        
+        for (Key key : keysToProcess) {
+            Thread.startVirtualThread(() -> {
+                try {
+                    executeAndPublishSingleOperation(wp, key, operations, asyncStream);
+                } finally {
+                    if (pendingOps.decrementAndGet() == 0) {
+                        asyncStream.complete();
+                    }
+                }
+            });
+        }
+        
+        return new RecordStream(asyncStream);
     }
 }

@@ -16,9 +16,41 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
         this.key = key;
     }
     
+    @Override
+    public boolean allowsSecondaryIndexQuery() {
+        return false;
+    }
     // No need to implement limit on single read
     @Override
     public RecordStream execute() {
+        // Query default: async unless in transaction
+        if (getQueryBuilder().getTxnToUse() != null) {
+            return executeSync();
+        } else {
+            return executeAsync();
+        }
+    }
+    
+    @Override
+    public RecordStream executeSync() {
+        return executeInternal();
+    }
+    
+    @Override
+    public RecordStream executeAsync() {
+        if (getQueryBuilder().getTxnToUse() != null && Log.warnEnabled()) {
+            Log.warn(
+                "executeAsync() called within a transaction. " +
+                "Async operations may still be in flight when commit() is called, " +
+                "which could lead to inconsistent state. " +
+                "Consider using executeSync() or execute() for transactional safety."
+            );
+        }
+        // Single key reads are fast; async and sync are effectively the same
+        return executeInternal();
+    }
+    
+    private RecordStream executeInternal() {
         Policy policy = getSession().getBehavior().getMutablePolicy(CommandType.READ_SC);
         policy.txn = this.getQueryBuilder().getTxnToUse();
         policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();

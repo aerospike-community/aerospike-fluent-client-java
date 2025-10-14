@@ -5,7 +5,6 @@ import java.util.List;
 import com.aerospike.DataSet;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.client.Log;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.policy.QueryPolicy;
 import com.aerospike.client.query.PartitionFilter;
@@ -22,7 +21,40 @@ class IndexQueryBuilderImpl extends QueryImpl {
     }
     
     @Override
+    public boolean allowsSecondaryIndexQuery() {
+        return true;
+    }
+    
+    @Override
     public RecordStream execute() {
+        // Query default: async unless in transaction
+        if (getQueryBuilder().getTxnToUse() != null) {
+            return executeSync();
+        } else {
+            return executeAsync();
+        }
+    }
+    
+    @Override
+    public RecordStream executeSync() {
+        return executeInternal();
+    }
+    
+    @Override
+    public RecordStream executeAsync() {
+        if (getQueryBuilder().getTxnToUse() != null && com.aerospike.client.Log.warnEnabled()) {
+            com.aerospike.client.Log.warn(
+                "executeAsync() called within a transaction. " +
+                "Async operations may still be in flight when commit() is called, " +
+                "which could lead to inconsistent state. " +
+                "Consider using executeSync() or execute() for transactional safety."
+            );
+        }
+        // Index queries stream results; async and sync behave similarly
+        return executeInternal();
+    }
+    
+    private RecordStream executeInternal() {
         QueryPolicy queryPolicy = getSession().getBehavior().getMutablePolicy(CommandType.QUERY);
         if (this.getQueryBuilder().getWithNoBins()) {
             queryPolicy.includeBinData = false;
@@ -37,8 +69,8 @@ class IndexQueryBuilderImpl extends QueryImpl {
         stmt.setSetName(dataSet.getSet());
         stmt.setBinNames(getQueryBuilder().getBinNames());
 
-        if (getQueryBuilder().dslString != null) {
-            ParseResult parseResult = this.getParseResultFromWhereClause(getQueryBuilder().dslString, this.dataSet.getNamespace(), true);
+        if (getQueryBuilder().getDsl() != null) {
+            ParseResult parseResult = getQueryBuilder().getDsl().process(this.dataSet.getNamespace(), getSession());
             queryPolicy.filterExp = parseResult.getExp() == null ? null : Exp.build(parseResult.getExp());
             stmt.setFilter(parseResult.getFilter());
         }

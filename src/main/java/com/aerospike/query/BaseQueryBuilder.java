@@ -218,10 +218,11 @@ public interface BaseQueryBuilder<T extends BaseQueryBuilder<T>> {
     T inTransaction(Txn txn);
     
     /**
-     * Executes the query and returns a RecordStream.
-     * 
-     * <p>This method executes the query with all the configured parameters and
-     * returns a RecordStream that can be used to iterate through the results.</p>
+     * Executes the query with default behavior:
+     * <ul>
+     *   <li>For queries: async execution (unless in transaction)</li>
+     *   <li>In transactions: always synchronous</li>
+     * </ul>
      * 
      * <p>The RecordStream provides methods for:</p>
      * <ul>
@@ -235,4 +236,26 @@ public interface BaseQueryBuilder<T extends BaseQueryBuilder<T>> {
      * @see RecordStream
      */
     RecordStream execute();
+    
+    /**
+     * Execute the query synchronously. All operations complete before this method returns.
+     * <p>
+     * Use this when you need guaranteed completion before proceeding, or when in a transaction.
+     * Operations are still parallelized internally using virtual threads, but all threads
+     * are joined before returning.
+     * 
+     * @return RecordStream containing the results
+     */
+    RecordStream executeSync();
+    
+    /**
+     * Execute the query asynchronously using virtual threads for parallel execution.
+     * Results are streamed as they become available.
+     * <p>
+     * <b>WARNING:</b> Using this in transactions may lead to operations still being in flight
+     * when commit() is called, potentially leading to inconsistent state. A warning will be logged.
+     * 
+     * @return RecordStream that will be populated as results arrive
+     */
+    RecordStream executeAsync();
 }

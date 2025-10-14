@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.aerospike.RecordResult;
+import com.aerospike.client.BatchRecord;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 
@@ -14,21 +15,40 @@ public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, Resett
     private int currentPage = -1;
     private List<SortProperties> sortInfo;
     private int index = 0;
-    private long limit;
     
     public FixedSizeRecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
-        this(convertToKeyRecords(keys, records), limit, pageSize, sortProperties, respondAllKeys);
+        this(convertToRecordResults(keys, records), limit, pageSize, sortProperties, respondAllKeys);
     }
+
+    public FixedSizeRecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties) {
+        // Do not filter by null if !respondAllKeys as it must be done by the caller, in case there is a partition filter
+        RecordResult[] recs = records.stream().map(RecordResult::new).toArray(RecordResult[]::new);
+
+        if (limit > 0 && limit < recs.length) {
+            recs = Arrays.copyOf(recs, (int)limit);
+        }
+        this.records = recs;
+        this.pageSize = pageSize;
+        this.sortInfo = sortProperties;
+        applySort();
+        
+        this.numPages = (int)(pageSize > 0 ? (recs.length + pageSize - 1) / pageSize : 1);
+    }
+    
     public FixedSizeRecordStream(RecordResult[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
-        // TODO: Apply the limit.
+        RecordResult[] recs;
         if (respondAllKeys) {
-            this.records = records;
+            recs = records;
         }
         else {
-            this.records = Arrays.stream(records)
+            recs = Arrays.stream(records)
                     .filter(rec -> rec.recordOrNull() != null)
                     .toArray(RecordResult[]::new);
         }
+        if (limit < recs.length) {
+            recs = Arrays.copyOf(records, (int)limit);
+        }
+        this.records = recs;
         this.pageSize = pageSize;
         this.sortInfo = sortProperties;
         applySort();
@@ -37,7 +57,7 @@ public class FixedSizeRecordStream implements RecordStreamImpl, Sortable, Resett
     }
 
     // Called from the constructor, must be static
-    private static RecordResult[] convertToKeyRecords(Key[] keys, Record[] records) {
+    private static RecordResult[] convertToRecordResults(Key[] keys, Record[] records) {
         RecordResult[] recordResults = new RecordResult[keys.length];
         for (int i = 0; i < keys.length; i++) {
             recordResults[i] = new RecordResult(keys[i], records[i]);

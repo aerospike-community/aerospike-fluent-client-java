@@ -8,9 +8,11 @@ import com.aerospike.RecordMapper;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Key;
+import com.aerospike.client.Log;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.cluster.Partition;
+import com.aerospike.client.exp.Exp;
 import com.aerospike.dsl.BooleanExpression;
 
 
@@ -68,10 +70,10 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
     private int endPartition = 4096;
     protected boolean respondAllKeys = false;
     protected boolean failOnFilteredOut = false;
-    String dslString = null;
-    private BooleanExpression dsl = null;
+    private WhereClauseProcessor dsl = null;
     private List<SortProperties> sortInfo = null;
     private Txn txnToUse;
+    
     
     /**
      * Creates a QueryBuilder for querying an entire dataset.
@@ -373,6 +375,15 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
         return this.respondAllKeys;
     }
     
+    private void setWhereClause(WhereClauseProcessor clause) {
+        if (this.dsl == null) {
+            this.dsl = clause;
+        }
+        else {
+            throw new IllegalArgumentException("Only one 'where' clause can be specified. There is already one of '%s' and another is being set to '%s'"
+                    .formatted(this.dsl, clause));
+        }
+    }
     /**
      * Adds a filter condition using a DSL string.
      * 
@@ -397,22 +408,17 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
      * @throws IllegalArgumentException if multiple filter conditions are specified
      */
     public QueryBuilder where(String dsl, Object ... params) {
-        if (this.dslString != null && !this.dslString.equals(dsl)) {
-            throw new IllegalArgumentException(String.format("different DSL strings have been provided in 'where' clauses. The first is \"%s\", the second is \"%s\"",
-                    this.dslString, dsl));
-        }
-        if (this.dsl != null) {
-            throw new IllegalArgumentException("A Dsl as a string and a DSL as an expression cannot both be specified.");
-        }
+        WhereClauseProcessor impl;
         if (dsl == null || dsl.isEmpty()) {
-            this.dslString = null;
+            impl = null;
         }
         else if (params.length == 0) {
-            this.dslString = dsl;
+            impl = WhereClauseProcessor.from(this.implementation.allowsSecondaryIndexQuery(), dsl);
         }
         else {
-            this.dslString = String.format(dsl, params);
+            impl = WhereClauseProcessor.from(this.implementation.allowsSecondaryIndexQuery(), String.format(dsl, params));
         }
+        setWhereClause(impl);
         return this;
     }
     
@@ -441,10 +447,28 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
      * @throws IllegalArgumentException if multiple filter conditions are specified
      */
     public QueryBuilder where(BooleanExpression dsl) {
-        if (this.dslString != null || this.dsl != null) {
-            throw new IllegalArgumentException("Multiple .where(...) conditions cannot be specified.");
-        }
-        this.dsl = dsl;
+        setWhereClause(WhereClauseProcessor.from(dsl));
+        return this;
+    }
+    
+    public QueryBuilder where(PreparedDsl dsl, Object ... params) {
+        setWhereClause(WhereClauseProcessor.from(this.implementation.allowsSecondaryIndexQuery(), dsl, params));
+        return this;
+    }
+    /**
+     * Add a filter condition using a Exp operation. 
+     * 
+     * <p>Note: This method may be deprecated in the future -- use a string version instead.</p>
+     * <p>Note: If this method is used, no secondary index can be used. </p>
+     * 
+     * <p>Only one filter condition can be specified per query. Multiple calls
+     * to this method or {@link #where(String)} will throw an exception.</p>
+     * 
+     * @param exp - The expression to validate the records against.
+     * @return
+     */
+    public QueryBuilder where(Exp exp) {
+        setWhereClause(WhereClauseProcessor.from(exp));
         return this;
     }
     
@@ -572,7 +596,60 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
      * @return a RecordStream containing the query results
      * @see RecordStream
      */
+    @Override
     public RecordStream execute() {
-        return this.implementation.execute();
+        // Default: async unless in transaction
+        if (txnToUse != null) {
+            return executeSync();
+        } else {
+            return executeAsync();
+        }
+    }
+    
+    /**
+     * Execute the query synchronously. All operations complete before this method returns.
+     * <p>
+     * Use this when you need guaranteed completion before proceeding, or when in a transaction.
+     * Operations are still parallelized internally using virtual threads, but all threads
+     * are joined before returning.
+     * 
+     * @return RecordStream containing the results
+     */
+    @Override
+    public RecordStream executeSync() {
+        if (Log.debugEnabled()) {
+            Log.debug("QueryBuilder.executeSync() called, transaction: " + (txnToUse != null ? "yes" : "no"));
+        }
+        return this.implementation.executeSync();
+    }
+    
+    /**
+     * Execute the query asynchronously using virtual threads for parallel execution.
+     * Results are streamed as they become available.
+     * <p>
+     * <b>WARNING:</b> Using this in transactions may lead to operations still being in flight
+     * when commit() is called, potentially leading to inconsistent state. A warning will be logged.
+     * 
+     * @return RecordStream that will be populated as results arrive
+     */
+    @Override
+    public RecordStream executeAsync() {
+        if (Log.debugEnabled()) {
+            Log.debug("QueryBuilder.executeAsync() called, transaction: " + (txnToUse != null ? "yes" : "no"));
+        }
+        
+        if (txnToUse != null && Log.warnEnabled()) {
+            Log.warn(
+                "executeAsync() called within a transaction. " +
+                "Async operations may still be in flight when commit() is called, " +
+                "which could lead to inconsistent state. " +
+                "Consider using executeSync() or execute() for transactional safety."
+            );
+        }
+        return this.implementation.executeAsync();
+    }
+    
+    protected WhereClauseProcessor getDsl() {
+        return this.dsl;
     }
 }

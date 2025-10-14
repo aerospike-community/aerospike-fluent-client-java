@@ -12,14 +12,18 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import com.aerospike.query.RecordStreamImpl;
+
 //A push-driven stream that supports backpressure and cancellation.
-public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordResult> {
+public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordResult>, RecordStreamImpl {
     private static final Object END = new Object();
     private static final class Err { final Throwable t; Err(Throwable t){ this.t = t; } }
 
     private final BlockingQueue<Object> queue;
     private final AtomicBoolean completed = new AtomicBoolean(false);
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private boolean isFirstPage = true;
+    private Iterator<RecordResult> internalIterator = null;
 
     // Optional: give producers a way to see if they should stop.
     private final BooleanSupplier cancelled = () -> closed.get() || completed.get();
@@ -27,6 +31,13 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
     public AsyncRecordStream(int capacity) {
         if (capacity <= 0) throw new IllegalArgumentException("capacity must be > 0");
         this.queue = new ArrayBlockingQueue<>(capacity);
+    }
+    
+    private Iterator<RecordResult> getIterator() {
+        if (internalIterator == null) {
+            internalIterator = iterator();
+        }
+        return internalIterator;
     }
 
     /** For producers: push a result if we are still open. Blocks when backpressure applies. */
@@ -131,5 +142,27 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
         // Unknown size, ordered, non-null, concurrent-ish
         return Spliterators.spliteratorUnknownSize(iterator(),
                 Spliterator.ORDERED | Spliterator.NONNULL);
+    }
+    
+    // --- RecordStreamImpl methods ---
+    
+    @Override
+    public boolean hasMorePages() {
+        // Mirror SingleItemRecordStream behavior
+        if (isFirstPage) {
+            isFirstPage = false;
+            return true;
+        }
+        return false;
+    }
+    
+    @Override
+    public boolean hasNext() {
+        return getIterator().hasNext();
+    }
+    
+    @Override
+    public RecordResult next() {
+        return getIterator().next();
     }
 }
