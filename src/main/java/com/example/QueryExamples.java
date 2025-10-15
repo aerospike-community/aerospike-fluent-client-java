@@ -316,7 +316,7 @@ public class QueryExamples {
             List<Key> keyList2 = customerDataSet.ids(20,21,22,23,24,25,26,27);
             RecordStream thisStream = session.update(keyList2)
                    .bin("age").add(1)
-                   .executeAsync();
+                   .execute();
             
             System.out.println("Showing results before guaranteeing execution has finished.");
             print(session.query(keyList2).execute());
