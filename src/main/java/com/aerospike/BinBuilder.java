@@ -253,7 +253,87 @@ public class BinBuilder extends AbstractCdtBuilder{
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank, int count) {
         return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank, count));
     }
+
+    /**
+     * Navigate to map items by index range.
+     * Server selects "count" map items starting at specified index.
+     * 
+     * @param index the starting index
+     * @param count the number of items to select
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapIndexRange(int index, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_INDEX_RANGE, index, count));
+    }
     
+    /**
+     * Navigate to map items by index range to end.
+     * Server selects map items starting at specified index to the end of map.
+     * 
+     * @param index the starting index
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapIndexRange(int index) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_INDEX_RANGE, index));
+    }
+    
+    /**
+     * Navigate to map items by rank range.
+     * Server selects "count" map items starting at specified rank.
+     * 
+     * @param rank the starting rank
+     * @param count the number of items to select
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapRankRange(int rank, int count) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_RANK_RANGE, rank, count));
+    }
+    
+    /**
+     * Navigate to map items by rank range to end.
+     * Server selects map items starting at specified rank to the end of map.
+     * 
+     * @param rank the starting rank
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapRankRange(int rank) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_RANK_RANGE, rank));
+    }
+    
+    // Additional value type overloads
+    public CdtContextInvertableBuilder onMapValue(double value) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE, Value.get(value)));
+    }
+    public CdtContextInvertableBuilder onMapValue(boolean value) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE, Value.get(value)));
+    }
+    public CdtContextInvertableBuilder onMapValue(List<?> value) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE, Value.get(value)));
+    }
+    public CdtContextInvertableBuilder onMapValue(Map<?,?> value) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE, Value.get(value)));
+    }
+    
+    // Additional range type overloads
+    public CdtActionInvertableBuilder onMapKeyRange(byte[] startIncl, byte[] endExcl) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_RANGE, Value.get(startIncl), Value.get(endExcl))); 
+    }
+    public CdtActionInvertableBuilder onMapKeyRange(double startIncl, double endExcl) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_KEY_RANGE, Value.get(startIncl), Value.get(endExcl))); 
+    }
+    public CdtActionInvertableBuilder onMapValueRange(String startIncl, String endExcl) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl)));
+    }
+    public CdtActionInvertableBuilder onMapValueRange(byte[] startIncl, byte[] endExcl) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl)));
+    }
+    public CdtActionInvertableBuilder onMapValueRange(double startIncl, double endExcl) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl)));
+    }
+    public CdtActionInvertableBuilder onMapValueRange(boolean startIncl, boolean endExcl) {
+        return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl)));
+    }
+
     public CdtContextNonInvertableBuilder onListIndex(int index) {
         return new CdtGetOrRemoveBuilder(binName, opBuilder, new CdtOperationParams(CdtOperation.LIST_BY_INDEX, index));
     }

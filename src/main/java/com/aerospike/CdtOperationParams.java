@@ -26,6 +26,11 @@ class CdtOperationParams {
         this.int1 = int1;
         this.operation = operation;
     }
+    public CdtOperationParams(CdtOperation operation, int int1, int int2) {
+        this.int1 = int1;
+        this.int2 = int2;
+        this.operation = operation;
+    }
     public CdtOperationParams(CdtOperation operation, int int1, ListOrder createType, boolean pad) {
         this.int1 = int1;
         this.operation = operation;
@@ -139,6 +144,12 @@ class CdtOperationParams {
         pushCurrentToContext();
         this.operation = operation;
         this.int1 = int1;
+    }
+    public void pushCurrentToContextAndReplaceWith(CdtOperation operation, int int1, int int2) {
+        pushCurrentToContext();
+        this.operation = operation;
+        this.int1 = int1;
+        this.int2 = int2;
     }
     public void pushCurrentToContextAndReplaceWith(CdtOperation operation, int int1, ListOrder createType, boolean pad) {
         pushCurrentToContext();

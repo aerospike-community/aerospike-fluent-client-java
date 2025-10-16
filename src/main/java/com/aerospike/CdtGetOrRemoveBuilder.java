@@ -22,6 +22,7 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
     
     protected static enum CdtOperation {
         MAP_BY_INDEX,
+        MAP_BY_INDEX_RANGE,
         MAP_BY_KEY,
         MAP_BY_KEY_LIST,
         MAP_BY_KEY_RANGE,
@@ -45,6 +46,12 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         switch (params.getOperation()) {
         case MAP_BY_INDEX:
             return opBuilder.addOp(MapOperation.getByIndex(binName, params.getInt1(), MapReturnType.VALUE, params.context()));
+        case MAP_BY_INDEX_RANGE:
+            if (params.hasInt2()) {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), params.getInt2(), MapReturnType.VALUE, params.context()));
+            } else {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), MapReturnType.VALUE, params.context()));
+            }
         case MAP_BY_KEY:
             return opBuilder.addOp(MapOperation.getByKey(binName, params.getVal1(), MapReturnType.VALUE, params.context()));
         case MAP_BY_KEY_LIST:
@@ -89,6 +96,12 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         switch (params.getOperation()) {
         case MAP_BY_INDEX:
             return opBuilder.addOp(MapOperation.getByIndex(binName, params.getInt1(), MapReturnType.KEY, params.context()));
+        case MAP_BY_INDEX_RANGE:
+            if (params.hasInt2()) {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), params.getInt2(), MapReturnType.KEY, params.context()));
+            } else {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), MapReturnType.KEY, params.context()));
+            }
         case MAP_BY_KEY:
             return opBuilder.addOp(MapOperation.getByKey(binName, params.getVal1(), MapReturnType.KEY, params.context()));
         case MAP_BY_KEY_LIST:
@@ -129,6 +142,12 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         switch (params.getOperation()) {
         case MAP_BY_INDEX:
             return opBuilder.addOp(MapOperation.getByIndex(binName, params.getInt1(), MapReturnType.COUNT, params.context()));
+        case MAP_BY_INDEX_RANGE:
+            if (params.hasInt2()) {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), params.getInt2(), MapReturnType.COUNT, params.context()));
+            } else {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), MapReturnType.COUNT, params.context()));
+            }
         case MAP_BY_KEY:
             return opBuilder.addOp(MapOperation.getByKey(binName, params.getVal1(), MapReturnType.COUNT, params.context()));
         case MAP_BY_KEY_LIST:
@@ -178,6 +197,12 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         case LIST_BY_RANK:
             throw new IllegalArgumentException("countAllOthers cannot be called after onMapIndex, onMapKey, onMapRank, onListIndex or onListRank: Th server does not support this");
             
+        case MAP_BY_INDEX_RANGE:
+            if (params.hasInt2()) {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), params.getInt2(), MapReturnType.COUNT | MapReturnType.INVERTED, params.context()));
+            } else {
+                return opBuilder.addOp(MapOperation.getByIndexRange(binName, params.getInt1(), MapReturnType.COUNT | MapReturnType.INVERTED, params.context()));
+            }
         case MAP_BY_KEY_LIST:
             return opBuilder.addOp(MapOperation.getByKeyList(binName, params.getValues(), MapReturnType.COUNT | MapReturnType.INVERTED, params.context()));
         case MAP_BY_KEY_RANGE:
@@ -213,6 +238,12 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         switch (params.getOperation()) {
         case MAP_BY_INDEX:
             return opBuilder.addOp(MapOperation.removeByIndex(binName, params.getInt1(), MapReturnType.NONE, params.context()));
+        case MAP_BY_INDEX_RANGE:
+            if (params.hasInt2()) {
+                return opBuilder.addOp(MapOperation.removeByIndexRange(binName, params.getInt1(), params.getInt2(), MapReturnType.NONE, params.context()));
+            } else {
+                return opBuilder.addOp(MapOperation.removeByIndexRange(binName, params.getInt1(), MapReturnType.NONE, params.context()));
+            }
         case MAP_BY_KEY:
             return opBuilder.addOp(MapOperation.removeByKey(binName, params.getVal1(), MapReturnType.NONE, params.context()));
         case MAP_BY_KEY_LIST:
@@ -262,6 +293,12 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         case LIST_BY_RANK:
             throw new IllegalArgumentException("countAllOthers cannot be called after onMapIndex, onMapKey, onMapRank, onListIndex or onListRank: Th server does not support this");
 
+        case MAP_BY_INDEX_RANGE:
+            if (params.hasInt2()) {
+                return opBuilder.addOp(MapOperation.removeByIndexRange(binName, params.getInt1(), params.getInt2(), MapReturnType.INVERTED, params.context()));
+            } else {
+                return opBuilder.addOp(MapOperation.removeByIndexRange(binName, params.getInt1(), MapReturnType.INVERTED, params.context()));
+            }
         case MAP_BY_KEY_LIST:
             return opBuilder.addOp(MapOperation.removeByKeyList(binName, params.getValues(), MapReturnType.INVERTED, params.context()));
         case MAP_BY_KEY_RANGE:
@@ -341,6 +378,22 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE, Value.get(value));
         return this;
     }
+    public CdtContextInvertableBuilder onMapValue(double value) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE, Value.get(value));
+        return this;
+    }
+    public CdtContextInvertableBuilder onMapValue(boolean value) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE, Value.get(value));
+        return this;
+    }
+    public CdtContextInvertableBuilder onMapValue(List<?> value) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE, Value.get(value));
+        return this;
+    }
+    public CdtContextInvertableBuilder onMapValue(Map<?,?> value) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE, Value.get(value));
+        return this;
+    }
     /**
      * @deprecated Typo in method name. Use {@link #onMapKeyRange(long, long)} instead.
      */
@@ -353,7 +406,36 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
         params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_KEY_RANGE, Value.get(startIncl), Value.get(endExcl));
         return this;
     }
-    public CdtContextInvertableBuilder onMapValueRange(long startIncl, long endExcl) {
+    public CdtContextInvertableBuilder onMapKeyRange(String startIncl, String endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_KEY_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    public CdtContextInvertableBuilder onMapKeyRange(byte[] startIncl, byte[] endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_KEY_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    public CdtContextInvertableBuilder onMapKeyRange(double startIncl, double endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_KEY_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    
+    public CdtActionInvertableBuilder onMapValueRange(long startIncl, long endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    public CdtActionInvertableBuilder onMapValueRange(String startIncl, String endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    public CdtActionInvertableBuilder onMapValueRange(byte[] startIncl, byte[] endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    public CdtActionInvertableBuilder onMapValueRange(double startIncl, double endExcl) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl));
+        return this;
+    }
+    public CdtActionInvertableBuilder onMapValueRange(boolean startIncl, boolean endExcl) {
         params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE_RANGE, Value.get(startIncl), Value.get(endExcl));
         return this;
     }
@@ -449,6 +531,56 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
     
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank, int count) {
         params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_VALUE_REL_RANK_RANGE, Value.get(value), rank, count);
+        return this;
+    }
+    
+    /**
+     * Navigate to map items by index range.
+     * Server selects "count" map items starting at specified index.
+     * 
+     * @param index the starting index
+     * @param count the number of items to select
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapIndexRange(int index, int count) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_INDEX_RANGE, index, count);
+        return this;
+    }
+    
+    /**
+     * Navigate to map items by index range to end.
+     * Server selects map items starting at specified index to the end of map.
+     * 
+     * @param index the starting index
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapIndexRange(int index) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_INDEX_RANGE, index);
+        return this;
+    }
+    
+    /**
+     * Navigate to map items by rank range.
+     * Server selects "count" map items starting at specified rank.
+     * 
+     * @param rank the starting rank
+     * @param count the number of items to select
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapRankRange(int rank, int count) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_RANK_RANGE, rank, count);
+        return this;
+    }
+    
+    /**
+     * Navigate to map items by rank range to end.
+     * Server selects map items starting at specified rank to the end of map.
+     * 
+     * @param rank the starting rank
+     * @return builder for continued chaining (invertable for range operations)
+     */
+    public CdtActionInvertableBuilder onMapRankRange(int rank) {
+        params.pushCurrentToContextAndReplaceWith(CdtOperation.MAP_BY_RANK_RANGE, rank);
         return this;
     }
     
