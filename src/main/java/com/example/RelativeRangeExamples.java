@@ -1,9 +1,16 @@
 package com.example;
 
-import com.aerospike.*;
-import com.aerospike.client.AerospikeException;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import java.util.*;
+import com.aerospike.Cluster;
+import com.aerospike.ClusterDefinition;
+import com.aerospike.DataSet;
+import com.aerospike.RecordStream;
+import com.aerospike.Session;
+import com.aerospike.client.AerospikeException;
+import com.aerospike.policy.Behavior;
 
 /**
  * Examples demonstrating the new relative range CDT operations
@@ -267,7 +274,7 @@ public class RelativeRangeExamples {
         ClusterDefinition clusterDef = new ClusterDefinition("localhost", 3000);
         
         try (Cluster cluster = clusterDef.connect()) {
-            Session session = cluster.session();
+            Session session = cluster.createSession(Behavior.DEFAULT);
             DataSet dataSet = DataSet.of("test", "students");
             
             System.out.println("=== Example 1: Key Relative Index Range ===");

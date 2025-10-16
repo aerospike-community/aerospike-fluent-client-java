@@ -35,6 +35,21 @@ public interface CdtContextNonInvertableBuilder extends CdtActionNonInvertableBu
     public CdtContextInvertableBuilder onMapValue(byte[] value);
     public CdtActionInvertableBuilder onMapValueRange(long startIncl, long endExcl);
 
+    // Map relative range operations
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(long key, int index);
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(String key, int index);
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(byte[] key, int index);
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(long key, int index, int count);
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(String key, int index, int count);
+    public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(byte[] key, int index, int count);
+
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(long value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(String value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(long value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(String value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank, int count);
+
     public CdtContextNonInvertableBuilder onListIndex(int index);
     public CdtContextNonInvertableBuilder onListIndex(int index, ListOrder order, boolean pad);
     public CdtContextNonInvertableBuilder onListRank(int index);
