@@ -41,6 +41,16 @@ public interface CdtContextNonInvertableBuilder extends CdtActionNonInvertableBu
     public CdtActionInvertableBuilder onMapKeyRange(String startIncl, String endExcl);
     public CdtActionInvertableBuilder onMapKeyRange(byte[] startIncl, byte[] endExcl);
     public CdtActionInvertableBuilder onMapKeyRange(double startIncl, double endExcl);
+    // SpecialValue combinations for onMapKeyRange
+    public CdtActionInvertableBuilder onMapKeyRange(SpecialValue startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(SpecialValue startIncl, long endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(SpecialValue startIncl, String endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(SpecialValue startIncl, byte[] endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(SpecialValue startIncl, double endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(long startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(String startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(byte[] startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapKeyRange(double startIncl, SpecialValue endExcl);
 
     // Map key relative rank range
     public CdtActionInvertableBuilder onMapKeyRelativeIndexRange(long key, int index);
@@ -65,6 +75,7 @@ public interface CdtContextNonInvertableBuilder extends CdtActionNonInvertableBu
     public CdtContextInvertableBuilder onMapValue(boolean value);
     public CdtContextInvertableBuilder onMapValue(List<?> value);
     public CdtContextInvertableBuilder onMapValue(Map<?,?> value);
+    public CdtContextInvertableBuilder onMapValue(SpecialValue value);
     
     // Map value range
     public CdtActionInvertableBuilder onMapValueRange(long startIncl, long endExcl);
@@ -72,16 +83,46 @@ public interface CdtContextNonInvertableBuilder extends CdtActionNonInvertableBu
     public CdtActionInvertableBuilder onMapValueRange(byte[] startIncl, byte[] endExcl);
     public CdtActionInvertableBuilder onMapValueRange(double startIncl, double endExcl);
     public CdtActionInvertableBuilder onMapValueRange(boolean startIncl, boolean endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(List<?> startIncl, List<?> endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(Map<?,?> startIncl, Map<?,?> endExcl);
+    // SpecialValue combinations for onMapValueRange
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, long endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, String endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, byte[] endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, double endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, boolean endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, List<?> endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(SpecialValue startIncl, Map<?,?> endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(long startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(String startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(byte[] startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(double startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(boolean startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(List<?> startIncl, SpecialValue endExcl);
+    public CdtActionInvertableBuilder onMapValueRange(Map<?,?> startIncl, SpecialValue endExcl);
 
     // Map value relative rank range
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(long value, int rank);
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(String value, int rank);
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(double value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(boolean value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(List<?> value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(Map<?,?> value, int rank);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(SpecialValue value, int rank);
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(long value, int rank, int count);
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(String value, int rank, int count);
     public CdtActionInvertableBuilder onMapValueRelativeRankRange(byte[] value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(double value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(boolean value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(List<?> value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(Map<?,?> value, int rank, int count);
+    public CdtActionInvertableBuilder onMapValueRelativeRankRange(SpecialValue value, int rank, int count);
 
-
+    // Map key and value list operations
+    public CdtContextInvertableBuilder onMapKeyList(List<?> keys);
+    public CdtContextInvertableBuilder onMapValueList(List<?> values);
 
     public CdtContextNonInvertableBuilder onListIndex(int index);
     public CdtContextNonInvertableBuilder onListIndex(int index, ListOrder order, boolean pad);
@@ -89,6 +130,7 @@ public interface CdtContextNonInvertableBuilder extends CdtActionNonInvertableBu
     public CdtContextInvertableBuilder onListValue(long value);
     public CdtContextInvertableBuilder onListValue(String value);
     public CdtContextInvertableBuilder onListValue(byte[] value);
+    public CdtContextInvertableBuilder onListValue(SpecialValue value);
 
     public OperationBuilder mapClear();
     public OperationBuilder mapSize();

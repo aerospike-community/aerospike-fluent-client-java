@@ -262,10 +262,145 @@ public class CdtMapOperationsExamples {
     }
     
     /**
+     * Example 10: Use INFINITY for unbounded range end
+     */
+    public static void example10_InfinityBound(Session session, DataSet dataSet) {
+        try {
+            // Setup: Create a map with numeric scores
+            Map<String, Long> scores = new LinkedHashMap<>();
+            scores.put("Alice", 75L);
+            scores.put("Bob", 82L);
+            scores.put("Charlie", 90L);
+            scores.put("David", 95L);
+            scores.put("Eve", 88L);
+            
+            session.upsert(dataSet.id("students"))
+                .bin("scores").setTo(scores)
+                .execute();
+            
+            // Get all scores from 85 to infinity (all scores >= 85)
+            // Using SpecialValue.INFINITY as the upper bound
+            RecordStream results = session.update(dataSet.id("students"))
+                .bin("scores")
+                .onMapValueRange(85L, com.aerospike.SpecialValue.INFINITY)
+                .getValues()
+                .execute();
+            
+            System.out.println("Scores >= 85: " + results);
+            
+        } catch (AerospikeException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Example 11: Use NULL boundary in key range
+     */
+    public static void example11_NullBound(Session session, DataSet dataSet) {
+        try {
+            // Setup: Create a map with string keys
+            Map<String, String> data = new LinkedHashMap<>();
+            data.put("alpha", "first");
+            data.put("beta", "second");
+            data.put("gamma", "third");
+            data.put("delta", "fourth");
+            
+            session.upsert(dataSet.id("data1"))
+                .bin("map").setTo(data)
+                .execute();
+            
+            // Range from NULL to "delta" - gets keys up to (but not including) "delta"
+            // Using SpecialValue.NULL as the lower bound
+            RecordStream results = session.update(dataSet.id("data1"))
+                .bin("map")
+                .onMapKeyRange(com.aerospike.SpecialValue.NULL, "delta")
+                .getKeys()
+                .execute();
+            
+            System.out.println("Keys from NULL to 'delta': " + results);
+            
+        } catch (AerospikeException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Example 12: Use List as value in relative rank range
+     */
+    public static void example12_ListAsValueInRelativeRank(Session session, DataSet dataSet) {
+        try {
+            // Setup: Create a map where values are lists
+            Map<String, List<Integer>> listsMap = new LinkedHashMap<>();
+            listsMap.put("small", Arrays.asList(1, 2, 3));
+            listsMap.put("medium", Arrays.asList(10, 20, 30));
+            listsMap.put("large", Arrays.asList(100, 200, 300));
+            listsMap.put("huge", Arrays.asList(1000, 2000, 3000));
+            
+            session.upsert(dataSet.id("lists1"))
+                .bin("data").setTo(listsMap)
+                .execute();
+            
+            // Find items with rank relative to a specific list value
+            List<Integer> searchValue = Arrays.asList(10, 20, 30);
+            
+            // Get the next 2 items starting from rank 1 relative to searchValue
+            RecordStream results = session.update(dataSet.id("lists1"))
+                .bin("data")
+                .onMapValueRelativeRankRange(searchValue, 1, 2)
+                .getKeys()
+                .execute();
+            
+            System.out.println("Keys relative to list value: " + results);
+            
+        } catch (AerospikeException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Example 13: Combining SpecialValue with regular values
+     */
+    public static void example13_CombinedSpecialValues(Session session, DataSet dataSet) {
+        try {
+            // Setup: Create a map with various numeric values
+            Map<String, Double> metrics = new LinkedHashMap<>();
+            metrics.put("cpu", 45.5);
+            metrics.put("memory", 67.8);
+            metrics.put("disk", 89.2);
+            metrics.put("network", 23.4);
+            
+            session.upsert(dataSet.id("metrics1"))
+                .bin("values").setTo(metrics)
+                .execute();
+            
+            // Get all values from 50.0 to INFINITY (all values >= 50.0)
+            RecordStream highValues = session.update(dataSet.id("metrics1"))
+                .bin("values")
+                .onMapValueRange(50.0, com.aerospike.SpecialValue.INFINITY)
+                .getKeys()
+                .execute();
+            
+            System.out.println("Metrics with values >= 50.0: " + highValues);
+            
+            // Get all values from NULL to 50.0 (all values < 50.0)
+            RecordStream lowValues = session.update(dataSet.id("metrics1"))
+                .bin("values")
+                .onMapValueRange(com.aerospike.SpecialValue.NULL, 50.0)
+                .getKeys()
+                .execute();
+            
+            System.out.println("Metrics with values < 50.0: " + lowValues);
+            
+        } catch (AerospikeException e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Main method to run all examples
      */
     public static void main(String[] args) {
-        ClusterDefinition clusterDef = new ClusterDefinition("localhost", 3000);
+        ClusterDefinition clusterDef = new ClusterDefinition("localhost", 3100);
         
         try (Cluster cluster = clusterDef.connect()) {
             Session session = cluster.createSession(Behavior.DEFAULT);
@@ -297,6 +432,18 @@ public class CdtMapOperationsExamples {
             
             System.out.println("\n=== Example 9: Map Value with List ===");
             example9_MapValueWithList(session, dataSet);
+            
+            System.out.println("\n=== Example 10: INFINITY Bound ===");
+            example10_InfinityBound(session, dataSet);
+            
+            System.out.println("\n=== Example 11: NULL Bound ===");
+            example11_NullBound(session, dataSet);
+            
+            System.out.println("\n=== Example 12: List as Value in Relative Rank ===");
+            example12_ListAsValueInRelativeRank(session, dataSet);
+            
+            System.out.println("\n=== Example 13: Combined SpecialValues ===");
+            example13_CombinedSpecialValues(session, dataSet);
             
         } catch (Exception e) {
             System.err.println("Connection error: " + e.getMessage());

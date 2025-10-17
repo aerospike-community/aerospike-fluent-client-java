@@ -191,6 +191,12 @@ class CdtOperationParams {
         this.int2 = int2;
     }
     
+    public void pushCurrentToContextAndReplaceWith(CdtOperation operation, List<Value> values) {
+        pushCurrentToContext();
+        this.operation = operation;
+        this.values = values;
+    }
+    
     public void pushCurrentToContext() {
         if (ctx == null) {
             ctx = new ArrayList<>();
