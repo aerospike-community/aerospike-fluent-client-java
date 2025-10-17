@@ -251,7 +251,7 @@ class BehaviorYamlLoader {
         
         // Apply availability mode reads configuration
         if (config.getAvailabilityModeReads() != null) {
-            SettableAvailabilityModeReadPolicy.Builder availabilityBuilder = builder.onAvailablityModeReads();
+            SettableAvailabilityModeReadPolicy.Builder availabilityBuilder = builder.onAvailabilityModeReads();
             applyPolicyConfig(availabilityBuilder, config.getAvailabilityModeReads());
             if (config.getAvailabilityModeReads().getMigrationReadConsistency() != null) {
                 availabilityBuilder.migrationReadConsistency(config.getAvailabilityModeReads().getMigrationReadConsistency());

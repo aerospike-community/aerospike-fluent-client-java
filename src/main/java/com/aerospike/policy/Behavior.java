@@ -43,7 +43,7 @@ public class Behavior {
     public static final Behavior DEFAULT 
             = new Behavior("default",
                     new BehaviorBuilder()
-                        .forAllOperations()
+                        .forAllOperations(ops -> ops
                             .abandonCallAfter(Duration.ofSeconds(30))
                             .delayBetweenRetries(Duration.ofMillis(0))
                             .maximumNumberOfCallAttempts(1)
@@ -54,39 +54,38 @@ public class Behavior {
                             .waitForCallToComplete(Duration.ofSeconds(1))
                             .waitForConnectionToComplete(Duration.ofSeconds(0))
                             .waitForSocketResponseAfterCallFails(Duration.ofSeconds(0))
-                        .done()
-                        .onAvailablityModeReads()
+                        )
+                        .onAvailabilityModeReads(ops -> ops
                             .migrationReadConsistency(ReadModeAP.ALL)
-                        .done()
-                        .onBatchReads()
+                        )
+                        .onBatchReads(ops -> ops
                             .maxConcurrentServers(1)
                             .allowInlineMemoryAccess(true)
                             .allowInlineSsdAccess(false)
-                        .done()
-                        .onBatchWrites() 
+                        )
+                        .onBatchWrites(ops -> ops
                             .allowInlineMemoryAccess(true)
                             .allowInlineSsdAccess(false)
                             .maxConcurrentServers(1)
-                        .done()
-                        .onConsistencyModeReads()
+                        )
+                        .onConsistencyModeReads(ops -> ops
                             .readConsistency(ReadModeSC.SESSION)
-                        .done()
-                        .onInfo()
+                        )
+                        .onInfo(ops -> ops
                             .abandonCallAfter(Duration.ofSeconds(1))
-                        .done()
-                        .onNonRetryableWrites()
+                        )
+                        .onNonRetryableWrites(ops -> ops
                             .useDurableDelete(false)
-                        .done()
-                        .onQuery()
+                        )
+                        .onQuery(ops -> ops
                             .recordQueueSize(5000)
                             .maxConcurrentServers(0)
                             .maximumNumberOfCallAttempts(6)
-                        .done()
-                        .onRetryableWrites()
+                        )
+                        .onRetryableWrites(ops -> ops
                             .useDurableDelete(false)
                             .maximumNumberOfCallAttempts(3)
-                        .done()
-                    ,
+                        ),
                     ExceptionPolicy.RETURN_AS_MANY_RESULTS_AS_POSSIBLE);
     
     
@@ -259,31 +258,31 @@ public class Behavior {
     }
     
     /**
-     * Create a new policy from the existing policy. This will inherit all the behaviour of the parent from
+     * Create a new policy from the existing policy. This will inherit all the behavior of the parent from
      * which it is derived, but can then override whichever aspects it likes.
      * <p/>
-     * Once a policy has been created, it is immutatable <b>except</b> for changes made by reloads the policies
+     * Once a policy has been created, it is immutable <b>except</b> for changes made by reloads the policies
      * via dynamic config.
      * <p/>
      * For example:
      * <pre>
      * Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("writeTest", builder -> {
      *    builder
-     *       .forAllOperations()
+     *       .forAllOperations(ops -> ops
      *           .resetTtlOnReadAtPercent(67)
      *           .useCompression(true)
-     *       .done()
-     *       .onRetryableWrites()
+     *       )
+     *       .onRetryableWrites(ops -> ops
      *           .delayBetweenRetries(Duration.ofMillis(25))
      *           .maximumNumberOfCallAttempts(7)
-     *       .done();
+     *       );
      * });
      * </pre>
      * 
      * This will create a new behavior with the specified values set.
      * @param newName - the name of this policy, as specifiable in the dynamic config file
-     * @param changer - The behavior changer used form a new behavior.
-     * @return The new behaviour
+     * @param changer - The behavior changer used to form a new behavior.
+     * @return The new behavior
      */
     public Behavior deriveWithChanges(String newName, BehaviorChanger changer) {
         Behavior result = new Behavior(newName);
@@ -378,7 +377,7 @@ public class Behavior {
     
     /**
      * Get the policy of the appropriate type from this behavior. This will aggregate all the information on this 
-     * behavior (the specific requested type, plus the "All" type), ascending up the superclass behaviour tree
+     * behavior (the specific requested type, plus the "All" type), ascending up the superclass behavior tree
      * until it reaches the root level, then the policy is formed.
      * <p/>
      * The results are cached, so this traversal will only occur on the first time the policy is used after the
@@ -424,36 +423,35 @@ public class Behavior {
     public static void main(String[] args) throws Exception {
         Behavior beh = Behavior.DEFAULT.deriveWithChanges("writeTest", builder -> {
             builder
-                .forAllOperations()
+                .forAllOperations(ops -> ops
                     .resetTtlOnReadAtPercent(67)
                     .useCompression(true)
-                .done()
-                .onRetryableWrites()
+                )
+                .onRetryableWrites(ops -> ops
                     .delayBetweenRetries(Duration.ofMillis(37))
                     .maximumNumberOfCallAttempts(7)
-                .done()
-            ;
+                );
         });
         
         Behavior beh2 = beh.deriveWithChanges("writeChild", builder -> {
             builder
-                .onRetryableWrites()
+                .onRetryableWrites(ops -> ops
                     .delayBetweenRetries(Duration.ofMillis(23))
-                .done();
+                );
         });
         Behavior beh3 = beh.deriveWithChanges("writeChild2", builder -> {
             builder
-                .forAllOperations()
+                .forAllOperations(ops -> ops
                     .delayBetweenRetries(Duration.ofMillis(13))
                     .abandonCallAfter(Duration.ofSeconds(5))
-                .done()
-                .onInfo()
+                )
+                .onInfo(ops -> ops
                     .abandonCallAfter(Duration.ofSeconds(3))
-                .done();
+                );
         });
         
-        for (Behavior behaviour : Behavior.getAllBehaviors()) {
-            System.out.println(behaviour.getName());
+        for (Behavior behavior : Behavior.getAllBehaviors()) {
+            System.out.println(behavior.getName());
         }
         Behavior.startMonitoring("/Users/tfaulkes/Programming/Aerospike/git/new-client-api/src/main/resources/behavior-example.yml");
         WritePolicy pol = Behavior.DEFAULT.getSharedPolicy(CommandType.WRITE_RETRYABLE);
@@ -472,8 +470,8 @@ public class Behavior {
         InfoPolicy infoPol = beh3.getSharedInfoPolicy();
         System.out.println(infoPol.timeout);
 
-        for (Behavior behaviour : Behavior.getAllBehaviors()) {
-            System.out.println(behaviour.getName());
+        for (Behavior behavior : Behavior.getAllBehaviors()) {
+            System.out.println(behavior.getName());
         }
 
         Behavior highPerformance = Behavior.getBehavior("high-performance");

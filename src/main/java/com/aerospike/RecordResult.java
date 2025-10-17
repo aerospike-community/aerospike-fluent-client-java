@@ -1,5 +1,6 @@
 package com.aerospike;
 
+import com.aerospike.client.BatchRecord;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
@@ -20,14 +21,26 @@ public record RecordResult(Key key, Record recordOrNull, int resultCode, boolean
         this(keyRecord.key, keyRecord.record, ResultCode.OK, false, null);
     }
     
+    public RecordResult(BatchRecord batchRecord) {
+        this(batchRecord.key, batchRecord.record, batchRecord.resultCode, batchRecord.inDoubt, ResultCode.getResultString(batchRecord.resultCode));
+    }
+    
     public boolean isOk() {
         return this.resultCode == ResultCode.OK;
     }
     
-    public Record recordOrThrow() {
+    /**
+     * If this result contains an error, then throw the appropriate exception, otherwise return this object
+     */
+    public RecordResult orThrow() {
         if (!isOk()) {
             throw AeroException.resultCodeToException(resultCode, message(), inDoubt);
         }
+        return this;
+    }
+    
+    public Record recordOrThrow() {
+        orThrow();
         return recordOrNull;
     }
 }

@@ -11,6 +11,7 @@ import java.util.stream.IntStream;
 
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
+import com.aerospike.DataSet;
 import com.aerospike.DefaultRecordMappingFactory;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
@@ -35,9 +36,10 @@ import com.example.model_mappers.CustomerMapper;
 public class QueryExamples {
     
     public static void print(RecordStream recordStream) {
+        int count = 0;
         while (recordStream.hasNext()) {
             RecordResult key = recordStream.next();
-            System.out.printf("Key: %s, Value: %s\n", key.key(), key);
+            System.out.printf("%5d - Key: %s, Value: %s\n", (++count), key.key(), key);
         }
     }
     
@@ -57,44 +59,28 @@ public class QueryExamples {
                     )
                 ));
 
-//            Behavior newBehavior1 = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
-//                builder.forAllOperations(ops -> ops
-//                    .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
-//                )
-//                .onAvailablityModeReads(ops -> ops
-//                    .waitForCallToComplete(Duration.ofMillis(25))
-//                    .abandonCallAfter(Duration.ofMillis(100))
-//                    .maximumNumberOfCallAttempts(3)
-//                )
-//                .onBatchReads(ops -> ops
-//                    .maximumNumberOfCallAttempts(7)
-//                    .allowInlineMemoryAccess(true)
-//                )
-//            );
-
-            
             Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
-                builder.forAllOperations()
+                builder.forAllOperations(ops -> ops
                     .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
-                .done()
-                .onAvailablityModeReads()
+                )
+                .onAvailabilityModeReads(ops -> ops
                     .waitForCallToComplete(Duration.ofMillis(25))
                     .abandonCallAfter(Duration.ofMillis(100))
                     .maximumNumberOfCallAttempts(3)
-                .done()
-                .onBatchReads()
+                )
+                .onBatchReads(ops -> ops
                     .maximumNumberOfCallAttempts(7)
                     .allowInlineMemoryAccess(true)
-                .done()
+                )
             );
             Behavior childBehavior = newBehavior.deriveWithChanges("child", builder -> 
-                builder.onBatchWrites()
+                builder.onBatchWrites(ops -> ops
                     .allowInlineSsdAccess(true)
                     .maxConcurrentServers(5)
-                .done()
-                .onAvailablityModeReads()
+                )
+                .onAvailabilityModeReads(ops -> ops
                     .maximumNumberOfCallAttempts(8)
-                .done()
+                )
             );
                 
             TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
@@ -124,6 +110,10 @@ public class QueryExamples {
             
             session.touch(customerDataSet.ids(1,2,3)).execute();
             
+            
+            DataSet users = DataSet.of("test", "users");
+            Key key = users.id("alice");
+
             RecordStream result = session.upsert(customerDataSet.id(80))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(342)
@@ -219,6 +209,7 @@ public class QueryExamples {
                 .bin("rooms2").setTo(Map.of("test", true))
                 .execute();
         
+            
             RecordStream results = session.upsert(customerDataSet.id(102)) 
                 .bin("name").setTo("Bob")
                 .bin("age").setTo(30)
@@ -287,9 +278,16 @@ public class QueryExamples {
                 .objects(customers)
                 .using(customerMapper)
                 .execute();
-            
+
+            System.out.println("Updating all customers called Tim");
+            print(session.update(customerDataSet)
+                .where("$.name == 'Tim'")
+                .objects(customers)
+                .using(customerMapper)
+                .execute());
+
             // Batch partition filter test
-            List<Key> keys = customerDataSet.ids(IntStream.rangeClosed(20, 44).toArray());
+            List<Key> keys = customerDataSet.ids(IntStream.rangeClosed(20, 48).toArray());
             System.out.println("Read 25 records, but only those in partitions 0->2047");
             print(session.query(keys)
                     .onPartitionRange(0, 2048)
@@ -315,6 +313,33 @@ public class QueryExamples {
             System.out.println("Read the set, limit 6");
             print(session.query(customerDataSet).limit(6).execute());
             
+            List<Key> keyList2 = customerDataSet.ids(20,21,22,23,24,25,26,27);
+            RecordStream thisStream = session.update(keyList2)
+                   .bin("age").add(1)
+                   .execute();
+            
+            System.out.println("Showing results before guaranteeing execution has finished.");
+            print(session.query(keyList2).execute());
+            System.out.println("Showing async results");
+            print(thisStream);
+            System.out.println("Showing results now execution has finished.");
+            print(session.query(keyList2).execute());
+            
+
+            System.out.printf("Update people in list whose age is < 35 (%s)\n", keyList2);
+            print(session.update(keyList2)
+                   .bin("age").add(1)
+                   .where("$.age < 35")
+                   .execute());
+            print(session.query(keyList2).execute());
+
+            session.update(keyList2)
+                    .bin("age").add(1)
+                    .where("$.age < 35")
+                    .failOnFilteredOut()
+                    .execute();
+             print(session.query(keyList2).execute());
+
             // Query contract:
             // - If a list of ids is provided and there is not "sort" clause, the records in the stream are returned in the order which the ids are specified 
             // - If we're processing the records with notifiers, we cannot also get them back in a stream

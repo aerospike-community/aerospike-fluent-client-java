@@ -4,18 +4,14 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
-import com.aerospike.DSLPath;
 import com.aerospike.DataSet;
 import com.aerospike.OperationBuilder;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
-import com.aerospike.metadata.NamespaceInfo;
 import com.aerospike.policy.Behavior;
 
 public class Examples_NewStyle {
@@ -30,9 +26,9 @@ public class Examples_NewStyle {
         Cluster connection = new ClusterDefinition("localhost", 3100).connect();
 
         Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder ->
-            builder.onAvailablityModeReads()
+            builder.onAvailabilityModeReads(ops -> ops
                 .abandonCallAfter(Duration.ofSeconds(3))
-            .done()
+            )
         );
         
         Duration.of(50,  ChronoUnit.MILLIS);

@@ -4,7 +4,6 @@ import java.util.Objects;
 
 import com.aerospike.client.policy.QueryPolicy;
 import com.aerospike.policy.Behavior.CommandType;
-import com.aerospike.policy.SettableWritePolicy.Builder;
 
 public class SettableQueryPolicy extends SettablePolicy {
     private Integer recordQueueSize;

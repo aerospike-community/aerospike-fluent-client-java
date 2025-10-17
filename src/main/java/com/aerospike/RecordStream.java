@@ -11,10 +11,11 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import com.aerospike.client.BatchRecord;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
+import com.aerospike.client.ResultCode;
 import com.aerospike.client.policy.QueryPolicy;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
@@ -36,6 +37,13 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
     public RecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
         impl = new FixedSizeRecordStream(keys, records, limit, pageSize, sortProperties, respondAllKeys);
     }
+    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties) {
+        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties);
+    }
+    
+    public RecordStream(AsyncRecordStream asyncStream) {
+        impl = asyncStream;
+    }
     
     public RecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
             PartitionFilter filter, RecordSet recordSet, long limit, List<SortProperties> sortProperties) {
@@ -56,10 +64,10 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         else {
             // Sortable record sets must use the array implementation, so fetch all records
             int count = 0;
-            List<KeyRecord> recordList = new ArrayList<>();
+            List<RecordResult> recordList = new ArrayList<>();
             while (count < limit && !filter.isDone()) {
                 while (count < limit && recordSet.next()) {
-                    recordList.add(recordSet.getKeyRecord());
+                    recordList.add(new RecordResult(recordSet.getKeyRecord()));
                     count++;
                 }
                 recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
@@ -94,6 +102,48 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
             this.close();
         });
         return records;
+    }
+    
+    /**
+     * Filter the stream to return only failed operations. A failed operation is one where
+     * the result code is not {@link ResultCode#OK}.
+     * <p>
+     * This method consumes the current stream and returns a new RecordStream containing
+     * only the records with non-OK result codes. Useful for error handling and debugging.
+     * <p>
+     * Example usage:
+     * <pre>
+     * RecordStream results = session.update(keys).bin("name").setTo("value").execute();
+     * RecordStream failures = results.failures();
+     * failures.forEach(failure -> {
+     *     System.err.println("Failed for key: " + failure.key() + 
+     *                        ", reason: " + failure.message());
+     * });
+     * </pre>
+     * 
+     * @return A new RecordStream containing only records with resultCode != OK
+     */
+    public RecordStream failures() {
+        List<BatchRecord> failedRecords = new ArrayList<>();
+        
+        while (this.hasNext()) {
+            RecordResult result = this.next();
+            if (result.resultCode() != ResultCode.OK) {
+                // Convert RecordResult to BatchRecord for FixedSizeRecordStream
+                BatchRecord br = new BatchRecord(
+                    result.key(), 
+                    result.recordOrNull(), 
+                    result.resultCode(), 
+                    result.inDoubt(), 
+                    true
+                );
+                failedRecords.add(br);
+            }
+        }
+        
+        // Return new RecordStream with filtered results
+        // Using limit=0, pageSize=0, sortProperties=null for simple filtering
+        return new RecordStream(failedRecords, 0, 0, null);
     }
     
     /**
@@ -164,10 +214,10 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      */
     public <T> Optional<T> get(Key key, RecordMapper<T> mapper) throws AeroException {
         while (hasNext()) {
-            RecordResult kr = next();
-            if (kr.key().equals(key)) {
-                Record rec = kr.recordOrThrow();
-                return Optional.of(mapper.fromMap(rec.bins, kr.key(), rec.generation));
+            RecordResult thisRecord = next();
+            if (thisRecord.key().equals(key)) {
+                Record rec = thisRecord.recordOrThrow();
+                return Optional.of(mapper.fromMap(rec.bins, thisRecord.key(), rec.generation));
             }
         }
         return Optional.empty();
@@ -190,7 +240,12 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      */
     public Optional<RecordResult> getFirst(boolean throwException) {
         if (hasNext()) {
-            return Optional.of(next());
+            if (throwException) {
+                return Optional.of(next().orThrow());
+            }
+            else {
+                return Optional.of(next());
+            }
         }
         return Optional.empty();
     }
@@ -203,7 +258,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         if (hasNext()) {
             RecordResult item = next();
             Record rec = item.recordOrThrow();
-            return Optional.of(mapper.fromMap(rec.bins, item.key(), item.recordOrNull().generation));
+            return Optional.of(mapper.fromMap(rec.bins, item.key(), item.recordOrThrow().generation));
         }
         return Optional.empty();
     }

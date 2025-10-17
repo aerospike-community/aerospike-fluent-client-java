@@ -7,14 +7,11 @@ import java.util.Map;
 import com.aerospike.client.Value;
 import com.aerospike.client.cdt.ListOperation;
 import com.aerospike.client.cdt.ListOrder;
-import com.aerospike.client.cdt.ListPolicy;
 import com.aerospike.client.cdt.ListReturnType;
-import com.aerospike.client.cdt.ListWriteFlags;
 import com.aerospike.client.cdt.MapOperation;
 import com.aerospike.client.cdt.MapOrder;
 import com.aerospike.client.cdt.MapPolicy;
 import com.aerospike.client.cdt.MapReturnType;
-import com.aerospike.client.cdt.MapWriteFlags;
 
 public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder 
                                 implements CdtActionInvertableBuilder, CdtActionNonInvertableBuilder, 

@@ -1,5 +1,7 @@
 package com.aerospike.query;
 
+import com.aerospike.client.ResultCode;
+
 /**
  * Interface for query builders that support key-based operations.
  * These operations are only available when querying specific keys (single key or list of keys).
