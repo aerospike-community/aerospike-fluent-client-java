@@ -105,6 +105,10 @@ public class Cluster implements Closeable {
     public Session createSession(Behavior behavior) {
         return new Session(this, behavior);
     }
+
+    public TransactionalSession createTransactionalSession(Behavior behavior) {
+        return new TransactionalSession(this, behavior);
+    }
     
     /**
      * Gets the current record mapping factory.
