@@ -29,7 +29,8 @@ import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dsl.BooleanExpression;
 import com.aerospike.dsl.ParseResult;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
@@ -421,7 +422,10 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
     }
     
     protected RecordStream executeBatch() {
-        BatchPolicy batchPolicy = opBuilder.getSession().getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+        BatchPolicy batchPolicy = opBuilder.getSession().getBehavior()
+                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace))
+                .asBatchPolicy();
+
         batchPolicy.setTxn(txnToUse);
         
         // Apply where clause if present

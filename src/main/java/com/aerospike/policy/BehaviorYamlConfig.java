@@ -25,9 +25,6 @@ class BehaviorYamlConfig {
         @JsonProperty("parent")
         private String parent;
         
-        @JsonProperty("exceptionPolicy")
-        private Behavior.ExceptionPolicy exceptionPolicy;
-        
         @JsonProperty("sendKey")
         private Boolean sendKey;
         
@@ -67,9 +64,6 @@ class BehaviorYamlConfig {
         
         public String getParent() { return parent; }
         public void setParent(String parent) { this.parent = parent; }
-        
-        public Behavior.ExceptionPolicy getExceptionPolicy() { return exceptionPolicy; }
-        public void setExceptionPolicy(Behavior.ExceptionPolicy exceptionPolicy) { this.exceptionPolicy = exceptionPolicy; }
         
         public Boolean getSendKey() { return sendKey; }
         public void setSendKey(Boolean sendKey) { this.sendKey = sendKey; }

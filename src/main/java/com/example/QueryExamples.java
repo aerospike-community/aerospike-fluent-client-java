@@ -26,6 +26,7 @@ import com.aerospike.dsl.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
 import com.aerospike.info.classes.Sindex;
 import com.aerospike.policy.Behavior;
+import com.aerospike.policy.Behavior.Selectors;
 import com.aerospike.query.SortDir;
 import com.aerospike.query.SortProperties;
 import com.example.model.Address;
@@ -57,28 +58,28 @@ public class QueryExamples {
                         Customer.class, customerMapper,
                         Address.class, new AddressMapper()
                     )
-                ));
-
+                )); 
+ 
             Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder -> 
-                builder.forAllOperations(ops -> ops
-                    .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
+                builder.on(Selectors.all(), ops -> ops
+                        .waitForSocketResponseAfterCallFails(Duration.ofSeconds(3))
                 )
-                .onAvailabilityModeReads(ops -> ops
-                    .waitForCallToComplete(Duration.ofMillis(25))
-                    .abandonCallAfter(Duration.ofMillis(100))
-                    .maximumNumberOfCallAttempts(3)
+                .on(Selectors.reads().ap(), ops -> ops
+                        .waitForCallToComplete(Duration.ofMillis(25))
+                        .abandonCallAfter(Duration.ofMillis(100))
+                        .maximumNumberOfCallAttempts(3)
                 )
-                .onBatchReads(ops -> ops
-                    .maximumNumberOfCallAttempts(7)
-                    .allowInlineMemoryAccess(true)
+                .on(Selectors.reads().batch(), ops -> ops
+                        .maximumNumberOfCallAttempts(7)
+                        .allowInlineMemoryAccess(true)
                 )
             );
             Behavior childBehavior = newBehavior.deriveWithChanges("child", builder -> 
-                builder.onBatchWrites(ops -> ops
+                builder.on(Selectors.writes().batch(), ops -> ops
                     .allowInlineSsdAccess(true)
-                    .maxConcurrentServers(5)
+                    .maxConcurrentNodes(5)
                 )
-                .onAvailabilityModeReads(ops -> ops
+                .on(Selectors.reads().ap(), ops -> ops
                     .maximumNumberOfCallAttempts(8)
                 )
             );

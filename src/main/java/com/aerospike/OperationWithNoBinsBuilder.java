@@ -12,7 +12,8 @@ import com.aerospike.client.policy.BatchDeletePolicy;
 import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
 
 public class OperationWithNoBinsBuilder {
     private final List<Key> keys;
@@ -53,13 +54,17 @@ public class OperationWithNoBinsBuilder {
         
         switch (opType) {
         case EXISTS: {
-            BatchPolicy batchPolicy = session.getBehavior().getSharedPolicy(CommandType.BATCH_READ);
+            BatchPolicy batchPolicy = session.getBehavior()
+                    .getSettings(OpKind.READ, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .asBatchPolicy();
             boolean[] results = session.getClient().exists(batchPolicy, keys.toArray(new Key[0]));
             return toList(results);
         }
         
         case TOUCH: {
-            BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+            BatchPolicy batchPolicy = session.getBehavior()
+                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .asBatchPolicy();
             BatchWritePolicy batchWritePolicy = new BatchWritePolicy();
             batchWritePolicy.sendKey = batchPolicy.sendKey;
             
@@ -72,8 +77,10 @@ public class OperationWithNoBinsBuilder {
         }
             
         case DELETE: {
-            // TODO: Deletes should be durable by default is SC mode.
-            BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+            BatchPolicy batchPolicy = session.getBehavior()
+                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .asBatchPolicy();
+
             BatchDeletePolicy batchDeletePolicy = new BatchDeletePolicy();
             batchDeletePolicy.sendKey = batchPolicy.sendKey;
             BatchResults results = session.getClient().delete(batchPolicy, batchDeletePolicy, keys.toArray(Key[]::new));
@@ -89,7 +96,9 @@ public class OperationWithNoBinsBuilder {
     }
 
     public List<Boolean> execute() {
-        WritePolicy wp = session.getBehavior().getMutablePolicy(CommandType.WRITE_RETRYABLE);
+        WritePolicy wp = session.getBehavior()
+                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, session.isNamespaceSC(keys.get(0).namespace))
+                .asWritePolicy();
         if (key != null) {
             boolean result;
             switch (opType) {

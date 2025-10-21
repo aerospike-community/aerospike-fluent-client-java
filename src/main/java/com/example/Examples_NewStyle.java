@@ -13,6 +13,7 @@ import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Key;
 import com.aerospike.policy.Behavior;
+import com.aerospike.policy.Behavior.Selectors;
 
 public class Examples_NewStyle {
 
@@ -26,9 +27,8 @@ public class Examples_NewStyle {
         Cluster connection = new ClusterDefinition("localhost", 3100).connect();
 
         Behavior newBehavior = Behavior.DEFAULT.deriveWithChanges("newBehavior", builder ->
-            builder.onAvailabilityModeReads(ops -> ops
+            builder.on(Selectors.reads().ap())
                 .abandonCallAfter(Duration.ofSeconds(3))
-            )
         );
         
         Duration.of(50,  ChronoUnit.MILLIS);

@@ -121,8 +121,6 @@ class BehaviorYamlLoader {
         
         // Create the behavior with the specified name and exception policy
         String name = config.getName() != null ? config.getName() : "yaml-loaded";
-        Behavior.ExceptionPolicy exceptionPolicy = config.getExceptionPolicy() != null ? 
-            config.getExceptionPolicy() : Behavior.ExceptionPolicy.RETURN_AS_MANY_RESULTS_AS_POSSIBLE;
         
         Behavior behavior = new Behavior(name, builder, exceptionPolicy);
         

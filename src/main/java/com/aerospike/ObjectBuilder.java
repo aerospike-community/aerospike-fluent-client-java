@@ -28,7 +28,9 @@ import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dsl.ParseResult;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.Mode;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
 
 public class ObjectBuilder<T> {
     private final OperationObjectBuilder<T> opBuilder;
@@ -377,8 +379,11 @@ public class ObjectBuilder<T> {
         RecordMapper<T> recordMapper = getMapper(element);
         Key key = getKeyForElement(recordMapper, element); 
         Operation[] operations = operationsForElement(recordMapper, element);
-        CommandType type = OperationBuilder.areOperationsRetryable(operations) ? CommandType.WRITE_RETRYABLE : CommandType.WRITE_NON_RETRYABLE;
-        WritePolicy wp = this.opBuilder.getSession().getBehavior().getSharedPolicy(type);
+        OpKind type = OperationBuilder.areOperationsRetryable(operations) ? OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
+        WritePolicy wp = this.opBuilder.getSession().getBehavior()
+                .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace))
+                .asWritePolicy();
+
         wp.txn = this.txnToUse;
         if (generation >= 0) {
             wp.generation = generation;
@@ -425,9 +430,12 @@ public class ObjectBuilder<T> {
                 Key key = getKeyForElement(recordMapper, element);
                 Operation[] operations = operationsForElement(recordMapper, element);
                 
-                CommandType type = OperationBuilder.areOperationsRetryable(operations) 
-                    ? CommandType.WRITE_RETRYABLE : CommandType.WRITE_NON_RETRYABLE;
-                WritePolicy wp = this.opBuilder.getSession().getBehavior().getSharedPolicy(type);
+                OpKind type = OperationBuilder.areOperationsRetryable(operations) ? 
+                        OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
+                WritePolicy wp = this.opBuilder.getSession().getBehavior()
+                        .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace))
+                        .asWritePolicy();
+
                 wp.txn = this.txnToUse;
                 
                 if (generation >= 0) {
@@ -562,9 +570,11 @@ public class ObjectBuilder<T> {
                     Key key = getKeyForElement(recordMapper, element);
                     Operation[] operations = operationsForElement(recordMapper, element);
                     
-                    CommandType type = OperationBuilder.areOperationsRetryable(operations) 
-                        ? CommandType.WRITE_RETRYABLE : CommandType.WRITE_NON_RETRYABLE;
-                    WritePolicy wp = this.opBuilder.getSession().getBehavior().getSharedPolicy(type);
+                    OpKind type = OperationBuilder.areOperationsRetryable(operations) ? 
+                            OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
+                    WritePolicy wp = this.opBuilder.getSession().getBehavior()
+                            .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace))
+                            .asWritePolicy();
                     wp.txn = this.txnToUse;
                     
                     if (generation >= 0) {
@@ -633,9 +643,11 @@ public class ObjectBuilder<T> {
                     Key key = getKeyForElement(recordMapper, element);
                     Operation[] operations = operationsForElement(recordMapper, element);
                     
-                    CommandType type = OperationBuilder.areOperationsRetryable(operations) 
-                        ? CommandType.WRITE_RETRYABLE : CommandType.WRITE_NON_RETRYABLE;
-                    WritePolicy wp = this.opBuilder.getSession().getBehavior().getSharedPolicy(type);
+                    OpKind type = OperationBuilder.areOperationsRetryable(operations) ? 
+                            OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
+                    WritePolicy wp = this.opBuilder.getSession().getBehavior()
+                            .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace))
+                            .asWritePolicy();
                     wp.txn = this.txnToUse;
                     
                     if (generation >= 0) {
@@ -677,8 +689,7 @@ public class ObjectBuilder<T> {
      */
     private RecordStream executeBatch() {
         List<BatchRecord> batchWrites = new ArrayList<>();
-        BatchPolicy batchPolicy = this.opBuilder.getSession().getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
-
+        
         // Apply where clause if present
         Expression whereExp = null;
         if (opBuilder.getDsl() != null && !elements.isEmpty()) {
@@ -688,12 +699,15 @@ public class ObjectBuilder<T> {
             whereExp = Exp.build(parseResult.getExp());
         }
         
-        batchPolicy.failOnFilteredOut = opBuilder.isFailOnFilteredOut();
-        batchPolicy.filterExp = whereExp;
-
         // Apply expiration: use individual expiration if set, otherwise use "ForAll" expiration
         long effectiveExpiration = (expirationInSeconds != 0) ? expirationInSeconds : expirationInSecondsForAll;
         int expirationAsInt = getExpirationAsInt(effectiveExpiration);
+
+        BatchPolicy batchPolicy = this.opBuilder.getSession().getBehavior()
+                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, Mode.ANY)
+                .asBatchPolicy();
+        batchPolicy.failOnFilteredOut = opBuilder.isFailOnFilteredOut();
+        batchPolicy.filterExp = whereExp;
 
         for (T element : elements) {
             RecordMapper<T> recordMapper = getMapper(element);

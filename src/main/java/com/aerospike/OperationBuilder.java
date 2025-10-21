@@ -30,7 +30,8 @@ import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dsl.BooleanExpression;
 import com.aerospike.dsl.ParseResult;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
@@ -418,7 +419,10 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
     }
     
     protected WritePolicy getWritePolicy(boolean retryable, int generation, OpType opType) {
-        WritePolicy result = (WritePolicy)session.getBehavior().getMutablePolicy(retryable ? CommandType.WRITE_RETRYABLE : CommandType.WRITE_NON_RETRYABLE);
+        WritePolicy result = (WritePolicy)session.getBehavior()
+                .getSettings(retryable? OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE, OpShape.POINT, session.isNamespaceSC(keys.get(0).namespace))
+                .asWritePolicy();
+
         if (generation != 0) {
             result.generation = generation;
             result.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
@@ -516,7 +520,9 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         
         // Use batch operations if 10 or more keys
         if (keys.size() >= getBatchOperationThreshold()) {
-            BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+            BatchPolicy batchPolicy = session.getBehavior()
+                    .getSettings(retryable? OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .asBatchPolicy();
             batchPolicy.txn = wp.txn;
             BatchWritePolicy bwp = new BatchWritePolicy();
             bwp.expiration = wp.expiration;
@@ -561,7 +567,10 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
         
         // Use batch operations if 10 or more keys
         if (keys.size() >= getBatchOperationThreshold()) {
-            BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+            BatchPolicy batchPolicy = session.getBehavior()
+                    .getSettings(retryable? OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .asBatchPolicy();
+
             batchPolicy.txn = wp.txn;
             BatchWritePolicy bwp = new BatchWritePolicy();
             bwp.expiration = wp.expiration;

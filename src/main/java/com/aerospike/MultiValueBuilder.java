@@ -22,6 +22,8 @@ import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
 
 /**
  * Builder for operations that can handle multiple sets of values for multiple keys.
@@ -309,7 +311,9 @@ public class MultiValueBuilder {
         // TODO: In the real client we will just stream these back to the stream asynchronously,
         // but for now we're going to do everything sync.
 //        List<BatchRecord>
-        BatchPolicy batchPolicy = session.getBehavior().getMutablePolicy(CommandType.BATCH_WRITE);
+        BatchPolicy batchPolicy = session.getBehavior()
+                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.BATCH, 
+                        session.isNamespaceSC(valueSets.get(0).key.namespace)).asBatchPolicy();
         batchPolicy.txn = this.txnToUse;
         
         List<BatchRecord> batchRecords = valueSets.stream()
@@ -333,7 +337,10 @@ public class MultiValueBuilder {
         
         int count = 0;
         
-        WritePolicy wp = session.getBehavior().getMutablePolicy(CommandType.WRITE_RETRYABLE);
+        WritePolicy wp = session.getBehavior()
+                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, 
+                        session.isNamespaceSC(valueSets.get(0).key.namespace)).asWritePolicy();
+        
         wp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opType);
         for (RecordValues theseValues : valueSets) {
             int generation = theseValues.generation;
