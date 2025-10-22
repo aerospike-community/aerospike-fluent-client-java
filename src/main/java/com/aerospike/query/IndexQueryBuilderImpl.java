@@ -11,7 +11,9 @@ import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
 import com.aerospike.dsl.ParseResult;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
+import com.aerospike.policy.Behavior.Mode;
 
 class IndexQueryBuilderImpl extends QueryImpl {
     private final DataSet dataSet;
@@ -55,7 +57,8 @@ class IndexQueryBuilderImpl extends QueryImpl {
     }
     
     private RecordStream executeInternal() {
-        QueryPolicy queryPolicy = getSession().getBehavior().getMutablePolicy(CommandType.QUERY);
+        boolean isNamespaceSC = getSession().isNamespaceSC(this.dataSet.getNamespace());
+        QueryPolicy queryPolicy = getSession().getBehavior().getSettings(OpKind.READ, OpShape.QUERY, isNamespaceSC ? Mode.CP : Mode.AP).asQueryPolicy();
         if (this.getQueryBuilder().getWithNoBins()) {
             queryPolicy.includeBinData = false;
         }

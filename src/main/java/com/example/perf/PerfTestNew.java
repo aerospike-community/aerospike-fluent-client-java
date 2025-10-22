@@ -30,7 +30,7 @@ public class PerfTestNew implements IPerfTest {
     
     @Override
     public void insert(Customer customer) {
-        session.insertInto(customerDataSet)
+        session.insert(customerDataSet)
             .object(customer)
             .using(customerMapper)
             .execute();

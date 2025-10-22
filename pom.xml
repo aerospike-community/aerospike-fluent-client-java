@@ -20,7 +20,7 @@
 		<dependency>
 			<groupId>com.aerospike</groupId>
 		    <artifactId>aerospike-expression-dsl</artifactId>
-		    <version>0.1.0</version>
+		    <version>0.2.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
@@ -49,6 +49,13 @@
 		    <artifactId>sslcontext-kickstart-for-pem</artifactId>
 		    <version>8.1.1</version>
 		</dependency>
+		<!-- Test dependencies -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>5.10.1</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
   
 	<build>
@@ -73,6 +80,11 @@
 					<source>21</source>
 					<target>21</target>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.2.3</version>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

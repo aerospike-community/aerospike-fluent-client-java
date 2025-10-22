@@ -21,7 +21,7 @@ import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.policy.Behavior.CommandType;
+// CommandType removed - using new Behavior API
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
 
@@ -234,7 +234,7 @@ public class MultiValueBuilder {
      * session.doInTransaction(txnSession -> {
      *     Optional<KeyRecord> result = txnSession.query(customerDataSet.id(1)).execute().getFirst();
      *     // Do stuff...
-     *     txnSession.insertInto(customerDataSet.id(3));
+     *     txnSession.insert(customerDataSet.id(3));
      *     txnSession.delete(customerDataSet.id(3));
      * });
      * </pre> 

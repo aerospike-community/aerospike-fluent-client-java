@@ -1,7 +1,7 @@
 package com.aerospike;
 
 import com.aerospike.client.exp.Exp;
-import com.aerospike.dsl.BooleanExpression;
+import com.aerospike.dslobjects.BooleanExpression;
 import com.aerospike.query.PreparedDsl;
 
 /**

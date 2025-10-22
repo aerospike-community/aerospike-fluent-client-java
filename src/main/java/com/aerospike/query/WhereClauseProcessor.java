@@ -9,7 +9,6 @@ import com.aerospike.client.Value;
 import com.aerospike.client.command.ParticleType;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.query.Filter;
-import com.aerospike.dsl.BooleanExpression;
 import com.aerospike.dsl.DslParseException;
 import com.aerospike.dsl.ExpressionContext;
 import com.aerospike.dsl.Index;
@@ -24,6 +23,7 @@ import com.aerospike.dsl.ParseResult;
 import com.aerospike.dsl.ParsedExpression;
 import com.aerospike.dsl.api.DSLParser;
 import com.aerospike.dsl.impl.DSLParserImpl;
+import com.aerospike.dslobjects.BooleanExpression;
 
 public abstract class WhereClauseProcessor {
     protected final boolean allowsIndex;

@@ -7,7 +7,9 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Log;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.policy.Policy;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
+import com.aerospike.policy.Behavior.Mode;
 
 class SingleKeyQueryBuilderImpl extends QueryImpl {
     private final Key key;
@@ -51,7 +53,8 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
     }
     
     private RecordStream executeInternal() {
-        Policy policy = getSession().getBehavior().getMutablePolicy(CommandType.READ_SC);
+        boolean isNamespaceSC = getSession().isNamespaceSC(this.key.namespace);
+        Policy policy = getSession().getBehavior().getSettings(OpKind.READ, OpShape.POINT, isNamespaceSC ? Mode.CP : Mode.AP).asReadPolicy();
         policy.txn = this.getQueryBuilder().getTxnToUse();
         policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();
         if (!getQueryBuilder().isKeyInPartitionRange(key)) {

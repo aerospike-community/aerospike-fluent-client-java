@@ -28,8 +28,8 @@ import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.dsl.BooleanExpression;
 import com.aerospike.dsl.ParseResult;
+import com.aerospike.dslobjects.BooleanExpression;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
 import com.aerospike.query.PreparedDsl;
@@ -371,7 +371,7 @@ public class OperationBuilder implements FilterableOperation<OperationBuilder> {
      * session.doInTransaction(txnSession -> {
      *     Optional<KeyRecord> result = txnSession.query(customerDataSet.id(1)).execute().getFirst();
      *     // Do stuff...
-     *     txnSession.insertInto(customerDataSet.id(3));
+     *     txnSession.insert(customerDataSet.id(3));
      *     txnSession.delete(customerDataSet.id(3));
      * });
      * </pre> 

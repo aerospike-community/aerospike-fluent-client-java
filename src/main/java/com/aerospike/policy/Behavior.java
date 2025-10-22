@@ -33,21 +33,10 @@ import com.aerospike.client.policy.WritePolicy;
  * </ul>
  *
  * <h2>Basic Usage</h2>
- * <h3>Creating a behavior from scratch:</h3>
- * <pre>{@code
- * Behavior myBehavior = Behavior.builder("myBehavior")
- *     .on(Selectors.all(), ops -> ops
- *         .abandonCallAfter(Duration.ofSeconds(10))
- *         .maximumNumberOfCallAttempts(3)
- *     )
- *     .on(Selectors.reads().batch().ap(), ops -> ops
- *         .maxConcurrentNodes(8)
- *         .readMode(ReadModeAP.ALL)
- *     )
- *     .build();
- * }</pre>
+ * <p><b>Note:</b> All behaviors must derive from an existing behavior. The root of all behavior
+ * hierarchies is {@link #DEFAULT}, which provides sensible defaults for all operations.</p>
  * 
- * <h3>Creating a derived behavior (recommended):</h3>
+ * <h3>Creating a derived behavior:</h3>
  * <pre>{@code
  * // Derive from DEFAULT with changes
  * Behavior production = Behavior.DEFAULT.deriveWithChanges("production", builder -> builder
@@ -121,32 +110,33 @@ import com.aerospike.client.policy.WritePolicy;
 public final class Behavior {
 
     // -----------------------------------------------------------------------------------
-    // Public factory + DEFAULT
+    // Internal factory (package-private for DEFAULT initialization only)
     // -----------------------------------------------------------------------------------
-    static BehaviorBuilder builder(String name) { return new BehaviorBuilderImpl(name); }
+    private static BehaviorBuilder builder(String name) { return new BehaviorBuilderImpl(name, null); }
 
     public static final Behavior DEFAULT = Behavior.builder("DEFAULT")
             // Global defaults for all operations
             .on(Selectors.all(), ops -> ops
-                    .abandonCallAfter(Duration.ofSeconds(30))
+                    .abandonCallAfter(Duration.ofSeconds(1))
                     .delayBetweenRetries(Duration.ofMillis(0))
-                    .maximumNumberOfCallAttempts(1)
+                    .maximumNumberOfCallAttempts(3)
                     .replicaOrder(List.of(NodeCategory.MASTER))  // Old: SEQUENCE, now explicit list
                     .sendKey(true)
                     .useCompression(false)
-                    .waitForCallToComplete(Duration.ofSeconds(1))
+                    .waitForCallToComplete(Duration.ofSeconds(30))
                     .waitForConnectionToComplete(Duration.ofSeconds(0))
                     .waitForSocketResponseAfterCallFails(Duration.ofSeconds(0))
+            )
+            .on(Selectors.reads(), ops -> ops
+                    .resetTtlOnReadAtPercent(0)
             )
             // AP read defaults
             .on(Selectors.reads().ap(), ops -> ops
                     .readMode(ReadModeAP.ALL)  // Old: migrationReadModeSC
-                    .resetTtlOnReadAtPercent(0)
             )
             // CP read defaults
             .on(Selectors.reads().cp(), ops -> ops
                     .consistency(ReadModeSC.SESSION)  // Old: SESSION
-                    .resetTtlOnReadAtPercent(0)
             )
             // Batch read defaults
             .on(Selectors.reads().batch(), ops -> ops
@@ -160,6 +150,9 @@ public final class Behavior {
                     // .maxConcurrentNodes(0)  // Queries don't have maxConcurrentNodes
                     .maximumNumberOfCallAttempts(6)
             )
+            .on(Selectors.reads(), ops -> ops
+                    .resetTtlOnReadAtPercent(0)
+            )
             // Retryable write defaults
             .on(Selectors.writes().retryable(), ops -> ops
                     .useDurableDelete(false)
@@ -171,6 +164,7 @@ public final class Behavior {
             )
             // Non-retryable write defaults
             .on(Selectors.writes().nonRetryable(), ops -> ops
+                    .maximumNumberOfCallAttempts(1)
                     .useDurableDelete(false)
                     .simulateXdrWrite(false)
             )
@@ -295,10 +289,11 @@ public final class Behavior {
      * @return a new Behavior with settings inherited from this one plus the configured changes
      */
     public Behavior deriveWithChanges(String name, java.util.function.Consumer<BehaviorBuilder> configurator) {
-        BehaviorBuilder builder = Behavior.builder(name).defaultsFrom(this);
+        BehaviorBuilder builder = new BehaviorBuilderImpl(name, this);
         configurator.accept(builder);
         return builder.build();
     }
+
 
     /** Debug helper: prints patches (in call order) and the resolved matrix. */
     public String explain() {
@@ -326,11 +321,15 @@ public final class Behavior {
     /**
      * Builder for constructing Behavior instances with fluent configuration.
      * 
+     * <p><b>Note:</b> This builder is not directly accessible. Use {@link #deriveWithChanges(String, java.util.function.Consumer)}
+     * to create new behaviors that inherit from an existing behavior.</p>
+     * 
      * <h2>Basic Usage</h2>
      * 
-     * <h3>Creating a new Behavior:</h3>
+     * <h3>Creating a derived Behavior:</h3>
      * <pre>{@code
-     * Behavior myBehavior = Behavior.builder("myBehavior")
+     * // Derive from DEFAULT
+     * Behavior production = Behavior.DEFAULT.deriveWithChanges("production", builder -> builder
      *     .on(Selectors.all(), ops -> ops
      *         .abandonCallAfter(Duration.ofSeconds(10))
      *         .maximumNumberOfCallAttempts(3)
@@ -339,23 +338,10 @@ public final class Behavior {
      *         .maxConcurrentNodes(8)
      *         .readMode(ReadModeAP.ALL)
      *     )
-     *     .build();
-     * }</pre>
+     * );
      * 
-     * <h3>Creating a derived Behavior (with explicit parent):</h3>
-     * <pre>{@code
-     * Behavior child = Behavior.builder("child")
-     *     .defaultsFrom(Behavior.DEFAULT)  // Inherit from parent
-     *     .on(Selectors.writes().cp(), ops -> ops
-     *         .useDurableDelete(true)
-     *     )
-     *     .build();
-     * }</pre>
-     * 
-     * <h3>Preferred: Using deriveWithChanges (implicit parent):</h3>
-     * <pre>{@code
-     * // More intuitive API - see Behavior.deriveWithChanges()
-     * Behavior child = Behavior.DEFAULT.deriveWithChanges("child", builder -> builder
+     * // Create a child behavior
+     * Behavior productionHighLoad = production.deriveWithChanges("productionHighLoad", builder -> builder
      *     .on(Selectors.writes().cp(), ops -> ops
      *         .useDurableDelete(true)
      *     )
@@ -448,9 +434,12 @@ public final class Behavior {
     private static final class BehaviorBuilderImpl implements BehaviorBuilder {
         private final String name;
         private final List<Patch> patches = new ArrayList<>();
-        private Behavior base = Behavior.DEFAULT;
+        private Behavior base;
 
-        BehaviorBuilderImpl(String name) { this.name = Objects.requireNonNull(name); }
+        BehaviorBuilderImpl(String name, Behavior parent) {
+            this.name = Objects.requireNonNull(name);
+            this.base = parent; // null only for DEFAULT initialization
+        }
 
         @Override public BehaviorBuilder defaultsFrom(Behavior base) {
             this.base = Objects.requireNonNull(base);
@@ -573,7 +562,7 @@ public final class Behavior {
         if (src.commitLevel != null) dst.commitLevel = src.commitLevel;
         
         if (src.readModeAP != null) dst.readModeAP = src.readModeAP;
-        if (src.ReadModeSC != null) dst.ReadModeSC = src.ReadModeSC;
+        if (src.readModeSC != null) dst.readModeSC = src.readModeSC;
         if (src.resetTtlOnReadAtPercent != null) dst.resetTtlOnReadAtPercent = src.resetTtlOnReadAtPercent;
     }
 
@@ -609,7 +598,7 @@ public final class Behavior {
 
         // Read-mode-specific
         ReadModeAP readModeAP;           // AP
-        ReadModeSC ReadModeSC; // CP
+        ReadModeSC readModeSC; // CP
         Integer resetTtlOnReadAtPercent;
 
         @Override public String toString() {
@@ -636,7 +625,7 @@ public final class Behavior {
             if (commitLevel != null) m.put("commitLevel", commitLevel);
             
             if (readModeAP != null) m.put("readModeAP", readModeAP);
-            if (ReadModeSC != null) m.put("ReadModeSC", ReadModeSC);
+            if (readModeSC != null) m.put("readModeSC", readModeSC);
             if (resetTtlOnReadAtPercent != null) m.put("resetTtlOnReadAtPercent", resetTtlOnReadAtPercent);
             
             return m.toString();
@@ -649,9 +638,9 @@ public final class Behavior {
             writePolicy.connectTimeout = (int)this.waitForConnectionToComplete.toMillis();
             writePolicy.durableDelete = this.useDurableDelete;
             writePolicy.maxRetries = this.maximumNumberOfCallAttempts - 1;
-            writePolicy.readModeAP = this.readModeAP;
-            writePolicy.readModeSC = this.ReadModeSC;
-            writePolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
+            writePolicy.readModeAP = this.readModeAP == null ? ReadModeAP.ALL : this.readModeAP;
+            writePolicy.readModeSC = this.readModeSC == null ? ReadModeSC.SESSION : this.readModeSC;
+//            writePolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
             writePolicy.replica = Replica.SEQUENCE; // TODO
             writePolicy.sendKey = this.sendKey;
             writePolicy.sleepBetweenRetries = (int)this.delayBetweenRetries.toMillis();
@@ -667,9 +656,9 @@ public final class Behavior {
             batchPolicy.compress = this.useCompression;
             batchPolicy.connectTimeout = (int)this.waitForConnectionToComplete.toMillis();
             batchPolicy.maxRetries = this.maximumNumberOfCallAttempts - 1;
-            batchPolicy.readModeAP = this.readModeAP;
-            batchPolicy.readModeSC = this.ReadModeSC;
-            batchPolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
+            batchPolicy.readModeAP = this.readModeAP == null ? ReadModeAP.ALL : this.readModeAP;
+            batchPolicy.readModeSC = this.readModeSC == null ? ReadModeSC.SESSION : this.readModeSC;
+//            batchPolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
             batchPolicy.replica = Replica.SEQUENCE; // TODO
             batchPolicy.sendKey = this.sendKey;
             batchPolicy.sleepBetweenRetries = (int)this.delayBetweenRetries.toMillis();
@@ -688,9 +677,9 @@ public final class Behavior {
             queryPolicy.compress = this.useCompression;
             queryPolicy.connectTimeout = (int)this.waitForConnectionToComplete.toMillis();
             queryPolicy.maxRetries = this.maximumNumberOfCallAttempts - 1;
-            queryPolicy.readModeAP = this.readModeAP;
-            queryPolicy.readModeSC = this.ReadModeSC;
-            queryPolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
+            queryPolicy.readModeAP = this.readModeAP == null ? ReadModeAP.ALL : this.readModeAP;
+            queryPolicy.readModeSC = this.readModeSC == null ? ReadModeSC.SESSION : this.readModeSC;
+//            queryPolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
             queryPolicy.replica = Replica.SEQUENCE; // TODO
             queryPolicy.sendKey = this.sendKey;
             queryPolicy.sleepBetweenRetries = (int)this.delayBetweenRetries.toMillis();
@@ -700,7 +689,9 @@ public final class Behavior {
             
             queryPolicy.expectedDuration = QueryDuration.SHORT; // TODO
             queryPolicy.infoTimeout = 1000; // TODO
-            queryPolicy.maxConcurrentNodes = this.maxConcurrentNodes;
+            if (this.maxConcurrentNodes != null) {
+                queryPolicy.maxConcurrentNodes = this.maxConcurrentNodes;
+            }
             queryPolicy.recordQueueSize = this.recordQueueSize;
             return queryPolicy;
         }
@@ -709,8 +700,8 @@ public final class Behavior {
             readPolicy.compress = this.useCompression;
             readPolicy.connectTimeout = (int)this.waitForConnectionToComplete.toMillis();
             readPolicy.maxRetries = this.maximumNumberOfCallAttempts - 1;
-            readPolicy.readModeAP = this.readModeAP;
-            readPolicy.readModeSC = this.ReadModeSC;
+            readPolicy.readModeAP = this.readModeAP == null ? ReadModeAP.ALL : this.readModeAP;
+            readPolicy.readModeSC = this.readModeSC == null ? ReadModeSC.SESSION : this.readModeSC;
             readPolicy.readTouchTtlPercent = this.resetTtlOnReadAtPercent;
             readPolicy.replica = Replica.SEQUENCE; // TODO
             readPolicy.sendKey = this.sendKey;
@@ -784,7 +775,7 @@ public final class Behavior {
         @Override AllAnyModeTweaks waitForConnectionToComplete(Duration d);
         @Override AllAnyModeTweaks waitForSocketResponseAfterCallFails(Duration d);
     }
-    public interface ReadAnyAnyModeTweaks extends CommonTweaks {
+    public interface ReadAnyAnyModeTweaks extends ReadTweaks {
         @Override ReadAnyAnyModeTweaks abandonCallAfter(Duration d);
         @Override ReadAnyAnyModeTweaks delayBetweenRetries(Duration d);
         @Override ReadAnyAnyModeTweaks maximumNumberOfCallAttempts(int n);
@@ -794,6 +785,7 @@ public final class Behavior {
         @Override ReadAnyAnyModeTweaks waitForCallToComplete(Duration d);
         @Override ReadAnyAnyModeTweaks waitForConnectionToComplete(Duration d);
         @Override ReadAnyAnyModeTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override ReadAnyAnyModeTweaks resetTtlOnReadAtPercent(int percent);
     }
     public interface ReadAnyApTweaks extends ReadApTweaks {
         @Override ReadAnyApTweaks abandonCallAfter(Duration d);
@@ -1778,7 +1770,7 @@ public final class Behavior {
 
         // Read modes
         @Override public TweaksProxy readMode(ReadModeAP mode) { patch.settings.readModeAP = mode; return this; }
-        @Override public TweaksProxy consistency(ReadModeSC c) { patch.settings.ReadModeSC = c; return this; }
+        @Override public TweaksProxy consistency(ReadModeSC c) { patch.settings.readModeSC = c; return this; }
     }
 
     // -----------------------------------------------------------------------------------

@@ -3,7 +3,7 @@ package com.aerospike;
 /**
  * The TypeSafeDataSet allows object mapping functionality without warnings.
  * eg 
- *     session.insertInto(customerDataSet).object(sampleCust).execute();
+ *     session.insert(customerDataSet).object(sampleCust).execute();
  * gives an usafe type compiler warning if just using a DataSet.
  * 
  * TODO: See if this class can be removed and still eliminate the warnings.

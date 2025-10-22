@@ -41,6 +41,14 @@ public class OperationWithNoBinsBuilder {
         this.session = session;
     }
     
+    private Key getAnyKey() {
+        if (key != null) {
+            return key;
+        }
+        else {
+            return keys.get(0);
+        }
+    }
     private List<Boolean> toList(boolean[] booleanArray) {
         List<Boolean> results = new ArrayList<>();
         for (int i = 0; i < booleanArray.length; i++) {
@@ -55,7 +63,7 @@ public class OperationWithNoBinsBuilder {
         switch (opType) {
         case EXISTS: {
             BatchPolicy batchPolicy = session.getBehavior()
-                    .getSettings(OpKind.READ, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .getSettings(OpKind.READ, OpShape.BATCH, session.isNamespaceSC(getAnyKey().namespace))
                     .asBatchPolicy();
             boolean[] results = session.getClient().exists(batchPolicy, keys.toArray(new Key[0]));
             return toList(results);
@@ -78,7 +86,7 @@ public class OperationWithNoBinsBuilder {
             
         case DELETE: {
             BatchPolicy batchPolicy = session.getBehavior()
-                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.BATCH, session.isNamespaceSC(keys.get(0).namespace))
+                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.BATCH, session.isNamespaceSC(getAnyKey().namespace))
                     .asBatchPolicy();
 
             BatchDeletePolicy batchDeletePolicy = new BatchDeletePolicy();
@@ -97,7 +105,7 @@ public class OperationWithNoBinsBuilder {
 
     public List<Boolean> execute() {
         WritePolicy wp = session.getBehavior()
-                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, session.isNamespaceSC(keys.get(0).namespace))
+                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, session.isNamespaceSC(getAnyKey().namespace))
                 .asWritePolicy();
         if (key != null) {
             boolean result;

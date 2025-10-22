@@ -22,7 +22,7 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.cdt.MapOrder;
-import com.aerospike.dsl.Dsl;
+import com.aerospike.dslobjects.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
 import com.aerospike.info.classes.Sindex;
 import com.aerospike.policy.Behavior;
@@ -68,6 +68,10 @@ public class QueryExamples {
                         .waitForCallToComplete(Duration.ofMillis(25))
                         .abandonCallAfter(Duration.ofMillis(100))
                         .maximumNumberOfCallAttempts(3)
+                )
+                .on(Selectors.reads().query(), ops -> ops
+                        .waitForCallToComplete(Duration.ofSeconds(2))
+                        .abandonCallAfter(Duration.ofSeconds(30))
                 )
                 .on(Selectors.reads().batch(), ops -> ops
                         .maximumNumberOfCallAttempts(7)
@@ -145,11 +149,11 @@ public class QueryExamples {
 
             session.delete(customerDataSet.ids(900, 901, 902, 903, 904, 905)).execute();
             
-            session.insertInto(customerDataSet.id(899))
+            session.insert(customerDataSet.id(899))
                     .bins("name", "age", "hair", "dob")
                     .values("Tim", 312, "brown", new Date().getTime());
                     
-            RecordStream values = session.insertInto(customerDataSet.ids(900, 901, 902, 903, 904,905))
+            RecordStream values = session.insert(customerDataSet.ids(900, 901, 902, 903, 904,905))
                     .bins("name", "age", "hair", "dob")
                     .values("Tim", 312, "brown", new Date().getTime())
                     .values("Jane", 28, "blonde", new Date().getTime())
@@ -181,7 +185,7 @@ public class QueryExamples {
             
             session.delete(customerDataSet.id(102)).execute();
             
-            session.insertInto(customerDataSet.id(102))
+            session.insert(customerDataSet.id(102))
                 .bin("name").setTo("Sue")
                 .bin("age").setTo(27)
                 .bin("id").setTo(102)
@@ -275,7 +279,7 @@ public class QueryExamples {
                     new Customer(46, "Tim", 35, new Date())
                 );
             
-            session.insertInto(customerDataSet)
+            session.insert(customerDataSet)
                 .objects(customers)
                 .using(customerMapper)
                 .execute();
@@ -401,10 +405,10 @@ public class QueryExamples {
 //            session.doInTransaction(txnSession -> {
 //                Optional<KeyRecord> result = txnSession.query(customerDataSet.id(1)).execute().getFirst();
 //                if (true) {
-//                    txnSession.insertInto(customerDataSet.id(3));
+//                    txnSession.insert(customerDataSet.id(3));
 //                }
 //                txnSession.delete(customerDataSet.id(3));
-//                txnSession.insertInto(customerDataSet.id(3)).notInAnyTransaction().execute();
+//                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
 //            });
             
             customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
@@ -493,7 +497,7 @@ public class QueryExamples {
             System.out.println("Reference customer: " + sampleCust);
             
             session.delete(customerDataSet.id(999)).execute();
-            session.insertInto(customerDataSet).object(sampleCust).execute();
+            session.insert(customerDataSet).object(sampleCust).execute();
             Customer readCustomer = session.query(customerDataSet.id(999)).execute().toObjectList(customerMapper).get(0);
             System.out.println("Customer read back: " + readCustomer);
             System.out.println("--- End object mapping test ----");

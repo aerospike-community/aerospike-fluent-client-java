@@ -13,7 +13,7 @@ import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.cluster.Partition;
 import com.aerospike.client.exp.Exp;
-import com.aerospike.dsl.BooleanExpression;
+import com.aerospike.dslobjects.BooleanExpression;
 
 
 /**
@@ -556,7 +556,7 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
      * session.doInTransaction(txnSession -> {
      *     Optional<KeyRecord> result = txnSession.query(customerDataSet.id(1)).execute().getFirst();
      *     // Do stuff...
-     *     txnSession.insertInto(customerDataSet.id(3));
+     *     txnSession.insert(customerDataSet.id(3));
      *     txnSession.delete(customerDataSet.id(3));
      * });
      * </pre> 

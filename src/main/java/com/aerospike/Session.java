@@ -471,7 +471,7 @@ public class Session {
     // -------------------
     // CUD functionality
     // -------------------
-    public OperationBuilder insertInto(Key key) {
+    public OperationBuilder insert(Key key) {
         return new OperationBuilder(this, key, OpType.INSERT);
     }
     
@@ -496,11 +496,11 @@ public class Session {
         return new OperationBuilder(this, keyList, OpType.UPSERT);
     }
     
-    public OperationBuilder insertInto(List<Key> keys) {
+    public OperationBuilder insert(List<Key> keys) {
         return new OperationBuilder(this, keys, OpType.INSERT);
     }
     
-    public OperationBuilder insertInto(Key key1, Key key2, Key... keys) {
+    public OperationBuilder insert(Key key1, Key key2, Key... keys) {
         List<Key> keyList = buildKeyList(key1, key2, keys);
         return new OperationBuilder(this, keyList, OpType.INSERT);
     }
@@ -561,11 +561,11 @@ public class Session {
     // --------------------------------
     // Object mapping functionality
     // --------------------------------
-    public OperationObjectBuilder insertInto(DataSet dataSet) {
+    public OperationObjectBuilder insert(DataSet dataSet) {
         return new OperationObjectBuilder(this, dataSet, OpType.INSERT);
     }
     
-    public <T> OperationObjectBuilder<T> insertInto(TypeSafeDataSet<T> dataSet) {
+    public <T> OperationObjectBuilder<T> insert(TypeSafeDataSet<T> dataSet) {
         return new OperationObjectBuilder<T>(this, dataSet, OpType.INSERT);
     }
     

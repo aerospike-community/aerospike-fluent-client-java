@@ -17,7 +17,9 @@ import com.aerospike.client.exp.Exp;
 import com.aerospike.client.exp.Expression;
 import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.dsl.ParseResult;
-import com.aerospike.policy.Behavior.CommandType;
+import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Behavior.OpShape;
+import com.aerospike.policy.Behavior.Mode;
 
 class BatchKeyQueryBuilderImpl extends QueryImpl {
     private final List<Key> keyList;
@@ -106,7 +108,8 @@ class BatchKeyQueryBuilderImpl extends QueryImpl {
             }
         }
 
-        BatchPolicy policy = getSession().getBehavior().getMutablePolicy(CommandType.BATCH_READ);
+        boolean isNamespaceSC = getSession().isNamespaceSC(this.keyList.get(0).namespace);
+        BatchPolicy policy = getSession().getBehavior().getSettings(OpKind.READ, OpShape.BATCH, isNamespaceSC ? Mode.CP : Mode.AP).asBatchPolicy();
         policy.filterExp = whereExp;
         policy.setTxn(this.getQueryBuilder().getTxnToUse());
         policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();
