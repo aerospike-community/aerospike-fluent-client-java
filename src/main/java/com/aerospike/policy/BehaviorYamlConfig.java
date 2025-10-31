@@ -3,6 +3,9 @@ package com.aerospike.policy;
 import java.time.Duration;
 import java.util.List;
 
+import com.aerospike.client.policy.ReadModeAP;
+import com.aerospike.client.policy.ReadModeSC;
+import com.aerospike.client.policy.Replica;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -34,11 +37,11 @@ class BehaviorYamlConfig {
         @JsonProperty("allOperations")
         private PolicyConfig allOperations;
         
-        @JsonProperty("consistencyModeReads")
-        private ConsistencyModeReadConfig consistencyModeReads;
+        @JsonProperty("readModeSC")
+        private ConsistencyModeReadConfig readModeSC;
         
-        @JsonProperty("availabilityModeReads")
-        private AvailabilityModeReadConfig availabilityModeReads;
+        @JsonProperty("readModeAP")
+        private AvailabilityModeReadConfig readModeAP;
         
         @JsonProperty("retryableWrites")
         private WriteConfig retryableWrites;
@@ -74,11 +77,11 @@ class BehaviorYamlConfig {
         public PolicyConfig getAllOperations() { return allOperations; }
         public void setAllOperations(PolicyConfig allOperations) { this.allOperations = allOperations; }
         
-        public ConsistencyModeReadConfig getConsistencyModeReads() { return consistencyModeReads; }
-        public void setConsistencyModeReads(ConsistencyModeReadConfig consistencyModeReads) { this.consistencyModeReads = consistencyModeReads; }
+        public ConsistencyModeReadConfig getConsistencyModeReads() { return readModeSC; }
+        public void setConsistencyModeReads(ConsistencyModeReadConfig consistencyModeReads) { this.readModeSC = consistencyModeReads; }
         
-        public AvailabilityModeReadConfig getAvailabilityModeReads() { return availabilityModeReads; }
-        public void setAvailabilityModeReads(AvailabilityModeReadConfig availabilityModeReads) { this.availabilityModeReads = availabilityModeReads; }
+        public AvailabilityModeReadConfig getAvailabilityModeReads() { return readModeAP; }
+        public void setAvailabilityModeReads(AvailabilityModeReadConfig availabilityModeReads) { this.readModeAP = availabilityModeReads; }
         
         public WriteConfig getRetryableWrites() { return retryableWrites; }
         public void setRetryableWrites(WriteConfig retryableWrites) { this.retryableWrites = retryableWrites; }
@@ -115,7 +118,7 @@ class BehaviorYamlConfig {
         private Integer maximumNumberOfCallAttempts;
         
         @JsonProperty("replicaOrder")
-        private List<NodeCategory> replicaOrder;
+        private Replica replicaOrder;
         
         @JsonProperty("resetTtlOnReadAtPercent")
         private Integer resetTtlOnReadAtPercent;
@@ -151,8 +154,8 @@ class BehaviorYamlConfig {
         public Integer getMaximumNumberOfCallAttempts() { return maximumNumberOfCallAttempts; }
         public void setMaximumNumberOfCallAttempts(Integer maximumNumberOfCallAttempts) { this.maximumNumberOfCallAttempts = maximumNumberOfCallAttempts; }
         
-        public List<NodeCategory> getReplicaOrder() { return replicaOrder; }
-        public void setReplicaOrder(List<NodeCategory> replicaOrder) { this.replicaOrder = replicaOrder; }
+        public Replica getReplicaOrder() { return replicaOrder; }
+        public void setReplicaOrder(Replica replicaOrder) { this.replicaOrder = replicaOrder; }
         
         public Integer getResetTtlOnReadAtPercent() { return resetTtlOnReadAtPercent; }
         public void setResetTtlOnReadAtPercent(Integer resetTtlOnReadAtPercent) { this.resetTtlOnReadAtPercent = resetTtlOnReadAtPercent; }
@@ -175,20 +178,20 @@ class BehaviorYamlConfig {
     
     // Consistency mode read configuration
     public static class ConsistencyModeReadConfig extends PolicyConfig {
-        @JsonProperty("readConsistency")
-        private com.aerospike.client.policy.ReadModeSC readConsistency;
+        @JsonProperty("readModeSC")
+        private ReadModeSC readModeSC;
         
-        public com.aerospike.client.policy.ReadModeSC getReadConsistency() { return readConsistency; }
-        public void setReadConsistency(com.aerospike.client.policy.ReadModeSC readConsistency) { this.readConsistency = readConsistency; }
+        public ReadModeSC getReadConsistency() { return readModeSC; }
+        public void setReadConsistency(ReadModeSC readConsistency) { this.readModeSC = readConsistency; }
     }
     
     // Availability mode read configuration
     public static class AvailabilityModeReadConfig extends PolicyConfig {
-        @JsonProperty("migrationReadConsistency")
-        private com.aerospike.client.policy.ReadModeAP migrationReadConsistency;
+        @JsonProperty("readModeAP")
+        private ReadModeAP readModeAP;
         
-        public com.aerospike.client.policy.ReadModeAP getMigrationReadConsistency() { return migrationReadConsistency; }
-        public void setMigrationReadConsistency(com.aerospike.client.policy.ReadModeAP migrationReadConsistency) { this.migrationReadConsistency = migrationReadConsistency; }
+        public ReadModeAP getMigrationReadConsistency() { return readModeAP; }
+        public void setMigrationReadConsistency(ReadModeAP migrationReadConsistency) { this.readModeAP = migrationReadConsistency; }
     }
     
     // Write configuration

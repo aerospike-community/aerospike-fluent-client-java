@@ -31,6 +31,18 @@ public class AeroException extends RuntimeException {
         this.resultCode = resultCode;
     }
     
+    public static AeroException from(AerospikeException ae) {
+        return new AeroException(ae.getResultCode(), ae.getMessage(), ae);
+    }
+    
+    public int getResultCode() {
+        return resultCode;
+    }
+    
+    public boolean isInDoubt() {
+        return inDoubt;
+    }
+    
     public static AeroException resultCodeToException(int resultCode, String message, boolean inDoubt) {
         switch (resultCode) {
         case ResultCode.QUOTA_EXCEEDED:

@@ -1,23 +1,26 @@
 package com.aerospike.policy;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 import com.aerospike.client.policy.CommitLevel;
 import com.aerospike.client.policy.ReadModeAP;
 import com.aerospike.client.policy.ReadModeSC;
+import com.aerospike.client.policy.Replica;
 import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
-import com.aerospike.policy.Behavior.Settings;
 import com.aerospike.policy.Behavior.Selectors;
-import com.aerospike.policy.NodeCategory;
 
 /**
  * Comprehensive tests for Behavior class covering:
@@ -40,13 +43,13 @@ class BehaviorTest {
             assertNotNull(readPointAp, "READ:POINT:AP settings should exist");
             
             // Verify common settings are present
-            assertEquals(Duration.ofSeconds(30), readPointAp.abandonCallAfter);
+            assertEquals(Duration.ofSeconds(1), readPointAp.abandonCallAfter);
             assertEquals(Duration.ofMillis(0), readPointAp.delayBetweenRetries);
-            assertEquals(1, readPointAp.maximumNumberOfCallAttempts);
-            assertEquals(List.of(NodeCategory.MASTER), readPointAp.replicaOrder);
+            assertEquals(3, readPointAp.maximumNumberOfCallAttempts);
+            assertEquals(Replica.SEQUENCE, readPointAp.replicaOrder);
             assertTrue(readPointAp.sendKey);
             assertFalse(readPointAp.useCompression);
-            assertEquals(Duration.ofSeconds(1), readPointAp.waitForCallToComplete);
+            assertEquals(Duration.ofSeconds(30), readPointAp.waitForCallToComplete);
             assertEquals(Duration.ofSeconds(0), readPointAp.waitForConnectionToComplete);
             assertEquals(Duration.ofSeconds(0), readPointAp.waitForSocketResponseAfterCallFails);
         }
@@ -168,7 +171,7 @@ class BehaviorTest {
                             .abandonCallAfter(Duration.ofSeconds(10))
                             .delayBetweenRetries(Duration.ofMillis(100))
                             .maximumNumberOfCallAttempts(5)
-                            .replicaOrder(List.of(NodeCategory.MASTER, NodeCategory.ANY_REPLICA))
+                            .replicaOrder(Replica.SEQUENCE)
                             .sendKey(false)
                             .useCompression(true)
                             .waitForCallToComplete(Duration.ofSeconds(2))
@@ -186,6 +189,49 @@ class BehaviorTest {
             Settings writePointCp = behavior.getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, Mode.CP);
             assertEquals(Duration.ofSeconds(10), writePointCp.abandonCallAfter);
             assertTrue(writePointCp.useCompression);
+        }
+        
+        @Test
+        @DisplayName("Selectors.all() should allow setting all possible settings including mode-specific")
+        void testSelectorsAllWithModeSpecificSettings() {
+            Behavior behavior = Behavior.DEFAULT.deriveWithChanges("test", builder -> builder
+                    .on(Selectors.all(), ops -> ops
+                            .maximumNumberOfCallAttempts(5)
+                            .readMode(ReadModeAP.ONE)
+                            .consistency(ReadModeSC.LINEARIZE)
+                            .commitLevel(CommitLevel.COMMIT_MASTER)
+                            .useDurableDelete(true)
+                            .resetTtlOnReadAtPercent(50)
+                            .maxConcurrentNodes(10)
+                            .recordQueueSize(10000)
+                    )
+            );
+            
+            // Verify AP read settings
+            Settings readAp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.AP);
+            assertEquals(5, readAp.maximumNumberOfCallAttempts);
+            assertEquals(ReadModeAP.ONE, readAp.readModeAP);
+            assertEquals(50, readAp.resetTtlOnReadAtPercent);
+            
+            // Verify CP read settings
+            Settings readCp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.CP);
+            assertEquals(5, readCp.maximumNumberOfCallAttempts);
+            assertEquals(ReadModeSC.LINEARIZE, readCp.readModeSC);
+            assertEquals(50, readCp.resetTtlOnReadAtPercent);
+            
+            // Verify AP write settings
+            Settings writeAp = behavior.getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, Mode.AP);
+            assertEquals(5, writeAp.maximumNumberOfCallAttempts);
+            assertEquals(CommitLevel.COMMIT_MASTER, writeAp.commitLevel);
+            assertTrue(writeAp.useDurableDelete);
+            
+            // Verify batch settings
+            Settings batchRead = behavior.getSettings(OpKind.READ, OpShape.BATCH, Mode.AP);
+            assertEquals(10, batchRead.maxConcurrentNodes);
+            
+            // Verify query settings
+            Settings query = behavior.getSettings(OpKind.READ, OpShape.QUERY, Mode.AP);
+            assertEquals(10000, query.recordQueueSize);
         }
         
         @Test
@@ -217,9 +263,9 @@ class BehaviorTest {
             assertEquals(ReadModeAP.ONE, readPointAp.readModeAP);
             assertEquals(25, readPointAp.resetTtlOnReadAtPercent);
             
-            // Should not affect CP mode
+            // CP mode should have DEFAULT readModeAP (from Selectors.all())
             Settings readPointCp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.CP);
-            assertNull(readPointCp.readModeAP);
+            assertEquals(ReadModeAP.ALL, readPointCp.readModeAP); // DEFAULT value from Selectors.all()
         }
         
         @Test
@@ -236,9 +282,9 @@ class BehaviorTest {
             assertEquals(ReadModeSC.LINEARIZE, readPointCp.readModeSC);
             assertEquals(75, readPointCp.resetTtlOnReadAtPercent);
             
-            // Should not affect AP mode
+            // AP mode should have DEFAULT readModeSC (from Selectors.all())
             Settings readPointAp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.AP);
-            assertNull(readPointAp.readModeSC);
+            assertEquals(ReadModeSC.SESSION, readPointAp.readModeSC); // DEFAULT value from Selectors.all()
         }
         
         @Test
@@ -255,7 +301,7 @@ class BehaviorTest {
             
             // Should not affect batch - should have DEFAULT value
             Settings readBatchAp = behavior.getSettings(OpKind.READ, OpShape.BATCH, Mode.AP);
-            assertEquals(1, readBatchAp.maximumNumberOfCallAttempts); // DEFAULT value, not overridden
+            assertEquals(3, readBatchAp.maximumNumberOfCallAttempts); // DEFAULT value, not overridden
         }
         
         @Test
@@ -553,11 +599,11 @@ class BehaviorTest {
             
             Settings readAp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.AP);
             assertEquals(ReadModeAP.ONE, readAp.readModeAP);
-            assertNull(readAp.readModeSC);
+            assertEquals(ReadModeSC.SESSION, readAp.readModeSC); // DEFAULT value from Selectors.all()
             
             Settings readCp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.CP);
             assertEquals(ReadModeSC.LINEARIZE, readCp.readModeSC);
-            assertNull(readCp.readModeAP);
+            assertEquals(ReadModeAP.ALL, readCp.readModeAP); // DEFAULT value from Selectors.all()
         }
         
         @Test
@@ -825,8 +871,8 @@ class BehaviorTest {
             Settings settings = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.AP);
             assertNotNull(settings, "Should inherit from DEFAULT");
             // Verify it has DEFAULT settings
-            assertEquals(Duration.ofSeconds(30), settings.abandonCallAfter);
-            assertEquals(1, settings.maximumNumberOfCallAttempts);
+            assertEquals(Duration.ofSeconds(1), settings.abandonCallAfter);
+            assertEquals(3, settings.maximumNumberOfCallAttempts);
         }
         
         @Test
@@ -890,7 +936,7 @@ class BehaviorTest {
                             .abandonCallAfter(Duration.ofSeconds(99))
                             .delayBetweenRetries(Duration.ofMillis(999))
                             .maximumNumberOfCallAttempts(99)
-                            .replicaOrder(List.of(NodeCategory.ANY_REPLICA, NodeCategory.MASTER))
+                            .replicaOrder(Replica.SEQUENCE)
                             .sendKey(true)
                             .useCompression(true)
                             .waitForCallToComplete(Duration.ofSeconds(88))
@@ -903,7 +949,7 @@ class BehaviorTest {
             assertEquals(Duration.ofSeconds(99), settings.abandonCallAfter);
             assertEquals(Duration.ofMillis(999), settings.delayBetweenRetries);
             assertEquals(99, settings.maximumNumberOfCallAttempts);
-            assertEquals(List.of(NodeCategory.ANY_REPLICA, NodeCategory.MASTER), settings.replicaOrder);
+            assertEquals(Replica.SEQUENCE, settings.replicaOrder);
             assertTrue(settings.sendKey);
             assertTrue(settings.useCompression);
             assertEquals(Duration.ofSeconds(88), settings.waitForCallToComplete);

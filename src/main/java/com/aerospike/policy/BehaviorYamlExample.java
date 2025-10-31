@@ -49,7 +49,7 @@ public class BehaviorYamlExample {
                 Behavior highPerf = behaviors.get("high-performance");
                 
                 // Show resolved settings for retryable writes
-                Behavior.Settings writeSettings = highPerf.getSettings(
+                Settings writeSettings = highPerf.getSettings(
                     Behavior.OpKind.WRITE_RETRYABLE, 
                     Behavior.OpShape.POINT, 
                     Behavior.Mode.AP
@@ -65,7 +65,7 @@ public class BehaviorYamlExample {
                 System.out.println();
                 
                 // Show resolved settings for query operations
-                Behavior.Settings querySettings = highPerf.getSettings(
+                Settings querySettings = highPerf.getSettings(
                     Behavior.OpKind.READ, 
                     Behavior.OpShape.QUERY, 
                     Behavior.Mode.AP
@@ -85,7 +85,7 @@ public class BehaviorYamlExample {
                 System.out.println("=== Inheritance Example: batch-optimized (child of high-performance) ===");
                 Behavior batchOpt = behaviors.get("batch-optimized");
                 
-                Behavior.Settings batchReadSettings = batchOpt.getSettings(
+                Settings batchReadSettings = batchOpt.getSettings(
                     Behavior.OpKind.READ, 
                     Behavior.OpShape.BATCH, 
                     Behavior.Mode.AP
@@ -111,19 +111,19 @@ public class BehaviorYamlExample {
      */
     private static void demonstrateSettings(Behavior behavior) {
         // Read operations
-        Behavior.Settings readBatchAp = behavior.getSettings(Behavior.OpKind.READ, Behavior.OpShape.BATCH, Behavior.Mode.AP);
+        Settings readBatchAp = behavior.getSettings(Behavior.OpKind.READ, Behavior.OpShape.BATCH, Behavior.Mode.AP);
         if (readBatchAp != null && readBatchAp.maxConcurrentNodes != null) {
             System.out.println("  Batch reads (AP): maxConcurrentNodes=" + readBatchAp.maxConcurrentNodes);
         }
         
         // Write operations
-        Behavior.Settings writeRetryable = behavior.getSettings(Behavior.OpKind.WRITE_RETRYABLE, Behavior.OpShape.POINT, Behavior.Mode.AP);
+        Settings writeRetryable = behavior.getSettings(Behavior.OpKind.WRITE_RETRYABLE, Behavior.OpShape.POINT, Behavior.Mode.AP);
         if (writeRetryable != null && writeRetryable.useDurableDelete != null) {
             System.out.println("  Retryable writes: useDurableDelete=" + writeRetryable.useDurableDelete);
         }
         
         // Query operations
-        Behavior.Settings query = behavior.getSettings(Behavior.OpKind.READ, Behavior.OpShape.QUERY, Behavior.Mode.AP);
+        Settings query = behavior.getSettings(Behavior.OpKind.READ, Behavior.OpShape.QUERY, Behavior.Mode.AP);
         if (query != null && query.recordQueueSize != null) {
             System.out.println("  Query: recordQueueSize=" + query.recordQueueSize);
         }

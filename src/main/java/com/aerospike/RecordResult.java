@@ -7,22 +7,30 @@ import com.aerospike.client.ResultCode;
 import com.aerospike.client.query.KeyRecord;
 import com.aerospike.exception.AeroException;
 
-public record RecordResult(Key key, Record recordOrNull, int resultCode, boolean inDoubt, String message) {
+public record RecordResult(Key key, Record recordOrNull, int resultCode, AeroException exception, boolean inDoubt, String message) {
 
     public RecordResult(Key key, Record rec) {
-        this(key, rec, ResultCode.OK, false, null);
+        this(key, rec, ResultCode.OK, null, false, null);
     }
     
     public RecordResult(Key key, int resultCode, boolean inDoubt, String message) {
-        this(key, null, resultCode, inDoubt, message);
+        this(key, null, resultCode, null, inDoubt, message);
+    }
+    
+    public RecordResult(Key key, AeroException ae) {
+        this(key, null, ae.getResultCode(), ae, ae.isInDoubt(), ae.getMessage());
     }
     
     public RecordResult(KeyRecord keyRecord) {
-        this(keyRecord.key, keyRecord.record, ResultCode.OK, false, null);
+        this(keyRecord.key, keyRecord.record, ResultCode.OK, null, false, null);
     }
     
     public RecordResult(BatchRecord batchRecord) {
-        this(batchRecord.key, batchRecord.record, batchRecord.resultCode, batchRecord.inDoubt, ResultCode.getResultString(batchRecord.resultCode));
+        this(batchRecord.key, batchRecord.record, batchRecord.resultCode, null, batchRecord.inDoubt, ResultCode.getResultString(batchRecord.resultCode));
+    }
+    
+    public RecordResult(BatchRecord batchRecord, AeroException ae) {
+        this(batchRecord.key, batchRecord.record, batchRecord.resultCode, ae, batchRecord.inDoubt, ResultCode.getResultString(batchRecord.resultCode));
     }
     
     public boolean isOk() {
@@ -34,7 +42,12 @@ public record RecordResult(Key key, Record recordOrNull, int resultCode, boolean
      */
     public RecordResult orThrow() {
         if (!isOk()) {
-            throw AeroException.resultCodeToException(resultCode, message(), inDoubt);
+            if (exception != null) {
+                throw exception;
+            }
+            else {
+                throw AeroException.resultCodeToException(resultCode, message(), inDoubt);
+            }
         }
         return this;
     }

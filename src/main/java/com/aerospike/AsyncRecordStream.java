@@ -22,15 +22,20 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
     private final BlockingQueue<Object> queue;
     private final AtomicBoolean completed = new AtomicBoolean(false);
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private boolean isFirstPage = true;
+    private final AtomicBoolean isFirstPage = new AtomicBoolean(true);
     private Iterator<RecordResult> internalIterator = null;
 
     // Optional: give producers a way to see if they should stop.
     private final BooleanSupplier cancelled = () -> closed.get() || completed.get();
 
     public AsyncRecordStream(int capacity) {
-        if (capacity <= 0) throw new IllegalArgumentException("capacity must be > 0");
-        this.queue = new ArrayBlockingQueue<>(capacity);
+        if (capacity <= 0) {
+            throw new IllegalArgumentException("capacity must be > 0");
+        }
+        // Reserve one extra slot for END/Err marker to prevent deadlock.
+        // Without this, if the queue is full when complete() or error() is called,
+        // the terminal marker cannot be enqueued, causing consumers to hang forever.
+        this.queue = new ArrayBlockingQueue<>(capacity + 1);
     }
     
     private Iterator<RecordResult> getIterator() {
@@ -58,8 +63,12 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
 
     /** For producers: signal a terminal error (the consumer will see it as a runtime exception). */
     public void error(Throwable t) {
-        if (t == null) t = new RuntimeException("Unknown error");
-        if (completed.get()) return;
+        if (t == null) {
+            t = new RuntimeException("Unknown error");
+        }
+        if (completed.get()) {
+            return;
+        }
         // Try to enqueue the error; if we can't, close the stream immediately
         if (!queue.offer(new Err(t))) {
             close();
@@ -104,7 +113,9 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
             }
 
             @Override public RecordResult next() {
-                if (next == END) throw new NoSuchElementException();
+                if (next == END) {
+                    throw new NoSuchElementException();
+                }
                 if (next instanceof Err e) {
                     // Propagate as unchecked
                     RuntimeException re = (e.t instanceof RuntimeException r) ? r : new RuntimeException(e.t);
@@ -148,11 +159,8 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
     @Override
     public boolean hasMorePages() {
         // Mirror SingleItemRecordStream behavior
-        if (isFirstPage) {
-            isFirstPage = false;
-            return true;
-        }
-        return false;
+        // Use compareAndSet for thread-safety
+        return isFirstPage.compareAndSet(true, false);
     }
     
     @Override

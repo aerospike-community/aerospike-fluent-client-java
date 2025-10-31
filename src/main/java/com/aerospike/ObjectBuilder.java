@@ -28,6 +28,7 @@ import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dsl.ParseResult;
+import com.aerospike.exception.AeroException;
 import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
@@ -37,7 +38,6 @@ public class ObjectBuilder<T> {
     private final List<T> elements;
     private RecordMapper<T> recordMapper;
     private int generation = -1;
-    private Map<Integer, WritePolicy> customPolicies;
     private long expirationInSeconds = 0;
     private long expirationInSecondsForAll = 0;
     private Txn txnToUse;
@@ -453,17 +453,13 @@ public class ObjectBuilder<T> {
                 }
                 
                 try {
-                    com.aerospike.client.Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
+                    Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
                     if (opBuilder.isRespondAllKeys() || record != null) {
                         asyncStream.publish(new RecordResult(key, record));
                     }
                 } catch (AerospikeException ae) {
-                    if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
-                        if (opBuilder.isFailOnFilteredOut() || opBuilder.isRespondAllKeys()) {
-                            asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode())));
-                        }
-                    } else {
-                        asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode())));
+                    if (shouldPublish(ae, opBuilder)) {
+                        asyncStream.publish(new RecordResult(key, AeroException.from(ae)));
                     }
                 }
             } finally {
@@ -592,11 +588,7 @@ public class ObjectBuilder<T> {
                             allRecords.add(new BatchRecord(key, record, true));
                         }
                     } catch (AerospikeException ae) {
-                        if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
-                            if (opBuilder.isFailOnFilteredOut() || opBuilder.isRespondAllKeys()) {
-                                allRecords.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
-                            }
-                        } else {
+                        if (shouldPublish(ae, opBuilder)) {
                             allRecords.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
                         }
                     }
@@ -660,16 +652,12 @@ public class ObjectBuilder<T> {
                     wp.filterExp = whereExp;
                     
                     try {
-                        com.aerospike.client.Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
+                        Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
                         if (opBuilder.isRespondAllKeys() || record != null) {
                             asyncStream.publish(new RecordResult(key, record));
                         }
                     } catch (AerospikeException ae) {
-                        if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
-                            if (opBuilder.isFailOnFilteredOut() || opBuilder.isRespondAllKeys()) {
-                                asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode())));
-                            }
-                        } else {
+                        if (shouldPublish(ae, opBuilder)) {
                             asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode())));
                         }
                     }
@@ -682,6 +670,14 @@ public class ObjectBuilder<T> {
         }
         
         return new RecordStream(asyncStream);
+    }
+    
+    private boolean shouldPublish(AerospikeException ae, OperationObjectBuilder<T> opBuilder) {
+        return switch (ae.getResultCode()) {
+            case ResultCode.FILTERED_OUT -> 
+                opBuilder.isFailOnFilteredOut() || opBuilder.isRespondAllKeys();
+            default -> true;
+        };
     }
     
     /**
