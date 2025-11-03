@@ -1351,8 +1351,6 @@ public class CdtGetOrRemoveBuilder extends AbstractCdtBuilder
     }
 
     
-
-
     // ===============================
     // Setter methods after a mapIndex
     // ===============================

@@ -21,6 +21,8 @@ public final class Settings {
     Integer maximumNumberOfCallAttempts;
     Replica replicaOrder;
     Boolean sendKey;
+    // Exception handling
+    Boolean stackTraceOnException;
     Boolean useCompression;
     Duration waitForCallToComplete;
     Duration waitForConnectionToComplete;
@@ -72,6 +74,8 @@ public final class Settings {
         if (readModeAP != null) m.put("readModeAP", readModeAP);
         if (readModeSC != null) m.put("readModeSC", readModeSC);
         if (resetTtlOnReadAtPercent != null) m.put("resetTtlOnReadAtPercent", resetTtlOnReadAtPercent);
+        
+        if (stackTraceOnException != null) m.put("stackTraceOnException", stackTraceOnException);
 
         return m.toString();
     }
@@ -149,7 +153,11 @@ public final class Settings {
     }
 
     public int getResetTtlOnReadAtPercent() {
-        return resetTtlOnReadAtPercent == null ? 0 : resetTtlOnReadAtPercent;
+        return resetTtlOnReadAtPercent;
+    }
+    
+    public boolean getStackTraceOnException() {
+        return stackTraceOnException;
     }
     
     public WritePolicy asWritePolicy() {

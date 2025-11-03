@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.AerospikeException;
@@ -20,6 +21,7 @@ import com.aerospike.dsl.ParseResult;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
 import com.aerospike.policy.Behavior.Mode;
+import com.aerospike.policy.Settings;
 
 class BatchKeyQueryBuilderImpl extends QueryImpl {
     private final List<Key> keyList;
@@ -127,11 +129,23 @@ class BatchKeyQueryBuilderImpl extends QueryImpl {
                 batchRecords.addAll(batchRecordsForServer);
             }
             
+            // Convert BatchRecord to RecordResult
+            List<RecordResult> results = new ArrayList<>();
+            Settings settings = getSession().getBehavior()
+                    .getSettings(OpKind.READ, OpShape.BATCH, getSession().isNamespaceSC(keyList.get(0).namespace));
+            for (int i = 0; i < batchRecords.size(); i++) {
+                BatchRecord br = batchRecords.get(i);
+                if (getQueryBuilder().shouldIncludeResult(br.resultCode)) {
+                    results.add(getQueryBuilder().createRecordResultFromBatchRecord(br, settings, i));
+                }
+            }
+            
             // TODO: ResultsInKeyOrder?
-            return new RecordStream(batchRecords,
+            return new RecordStream(results,
                     limit,
                     getQueryBuilder().getPageSize(),
-                    getQueryBuilder().getSortInfo());
+                    getQueryBuilder().getSortInfo(),
+                    true);
         }
         catch (AerospikeException ae) {
             if (Log.warnEnabled() && ae.getResultCode() == ResultCode.UNSUPPORTED_FEATURE) {

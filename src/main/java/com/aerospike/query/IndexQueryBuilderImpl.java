@@ -5,15 +5,16 @@ import java.util.List;
 import com.aerospike.DataSet;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
+import com.aerospike.client.Log;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.policy.QueryPolicy;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
 import com.aerospike.dsl.ParseResult;
+import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
-import com.aerospike.policy.Behavior.Mode;
 
 class IndexQueryBuilderImpl extends QueryImpl {
     private final DataSet dataSet;
@@ -45,7 +46,7 @@ class IndexQueryBuilderImpl extends QueryImpl {
     @Override
     public RecordStream executeAsync() {
         if (getQueryBuilder().getTxnToUse() != null && com.aerospike.client.Log.warnEnabled()) {
-            com.aerospike.client.Log.warn(
+            Log.warn(
                 "executeAsync() called within a transaction. " +
                 "Async operations may still be in flight when commit() is called, " +
                 "which could lead to inconsistent state. " +
@@ -92,7 +93,7 @@ class IndexQueryBuilderImpl extends QueryImpl {
                 getQueryBuilder().getStartPartition(), 
                 getQueryBuilder().getEndPartition() - getQueryBuilder().getStartPartition());
         
-        RecordSet queryResults = getSession().getClient().queryPartitions(queryPolicy, stmt, filter);
-        return new RecordStream(getSession(), queryPolicy, stmt, filter, queryResults, limit, sortInfo);
+//        RecordSet queryResults = getSession().getClient().queryPartitions(queryPolicy, stmt, filter);
+        return new RecordStream(getSession(), queryPolicy, stmt, filter, limit, sortInfo);
     }
 }

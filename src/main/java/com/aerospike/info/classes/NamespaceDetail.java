@@ -34,6 +34,8 @@ public class NamespaceDetail {
     private long nonReplicaTombstones;
     @Aggregate
     private long unreplicatedRecords;
+    @And
+    private boolean applyTtlReductions;
     private long deadPartitions;
     private long unavailablePartitions;
     private long autoRevivedPartitions;
@@ -374,7 +376,7 @@ public class NamespaceDetail {
     private long stopWritesSysMemoryPct;
     private boolean strongConsistency;
     private boolean strongConsistencyAllowExpunge;
-    private long tombRaiderEligibleIge;
+    private long tombRaiderEligibleAge;
     private long tombRaiderPeriod;
     private long transactionPendingLimit;
     private long truncateThreads;
@@ -382,10 +384,13 @@ public class NamespaceDetail {
     private long xdrBinTombstoneTtl;
     private long xdrTombRaiderPeriod;
     private long xdrTombRaiderThreads;
-    private IndexType indexStorageType;
-    private IndexType sindexStorageType;
+    private IndexStorageType indexType;
+    private IndexStorageType sindexType;
     private StorageEngine storageEngine;
     private Geo2dsphereWithin geo2dsphereWithin;
+    @Aggregate
+    private long mrtMonitors;
+    private long nsClusterSize;
     @Override
     public String toString() {
         return "NamespaceDetail [effectiveReplicationFactor=" + effectiveReplicationFactor + ", objects=" + objects
@@ -1450,8 +1455,8 @@ public class NamespaceDetail {
     public boolean isStrongConsistencyAllowExpunge() {
         return strongConsistencyAllowExpunge;
     }
-    public long getTombRaiderEligibleIge() {
-        return tombRaiderEligibleIge;
+    public long getTombRaiderEligibleAge() {
+        return tombRaiderEligibleAge;
     }
     public long getTombRaiderPeriod() {
         return tombRaiderPeriod;
@@ -1474,16 +1479,19 @@ public class NamespaceDetail {
     public long getXdrTombRaiderThreads() {
         return xdrTombRaiderThreads;
     }
-    public IndexType getIndexStorageType() {
-        return indexStorageType;
-    }
-    public IndexType getSindexStorageType() {
-        return sindexStorageType;
-    }
     public StorageEngine getStorageEngine() {
         return storageEngine;
     }
     public Geo2dsphereWithin getGeo2dsphereWithin() {
         return geo2dsphereWithin;
+    }
+    public IndexStorageType getIndexType() {
+        return indexType;
+    }
+    public IndexStorageType getSindexType() {
+        return sindexType;
+    }
+    public boolean isApplyTtlReductions() {
+        return applyTtlReductions;
     }
 }

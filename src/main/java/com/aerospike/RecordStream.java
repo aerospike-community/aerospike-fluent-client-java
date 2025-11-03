@@ -37,8 +37,20 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
     public RecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
         impl = new FixedSizeRecordStream(keys, records, limit, pageSize, sortProperties, respondAllKeys);
     }
-    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties) {
-        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties);
+//    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties) {
+//        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties, true); // Default to true for backward compatibility
+//    }
+//    
+//    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties, boolean stackTraceOnException) {
+//        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties, stackTraceOnException);
+//    }
+    
+    public RecordStream(RecordResult[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
+        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties, respondAllKeys);
+    }
+    
+    public RecordStream(List<RecordResult> records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
+        impl = new FixedSizeRecordStream(records.toArray(RecordResult[]::new), limit, pageSize, sortProperties, respondAllKeys);
     }
     
     public RecordStream(AsyncRecordStream asyncStream) {
@@ -46,7 +58,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
     }
     
     public RecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
-            PartitionFilter filter, RecordSet recordSet, long limit, List<SortProperties> sortProperties) {
+            PartitionFilter filter, long limit, List<SortProperties> sortProperties) {
 
         boolean hasSortProperties = !(sortProperties == null || sortProperties.isEmpty());
         if (hasSortProperties && limit <= 0) {
@@ -59,6 +71,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         }
         if (!hasSortProperties) {
             // Not a sortable record set, just use the inbuilt stream / pagination interface
+            RecordSet recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
             impl = new PaginatedRecordStream(session, queryPolicy, statement, filter, recordSet, limit);
         }
         else {
@@ -66,14 +79,14 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
             int count = 0;
             List<RecordResult> recordList = new ArrayList<>();
             while (count < limit && !filter.isDone()) {
-                while (count < limit && recordSet.next()) {
-                    recordList.add(new RecordResult(recordSet.getKeyRecord()));
-                    count++;
+                try (RecordSet recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter)) {
+                    while (count < limit && recordSet.next()) {
+                        recordList.add(new RecordResult(recordSet.getKeyRecord(), -1)); // Query operation, index = -1
+                        count++;
+                    }
                 }
-                recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
             }
-            recordSet.close();
-            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), 0, (int)statement.getMaxRecords(), sortProperties, false);
+            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), limit, (int)statement.getMaxRecords(), sortProperties, false);
         }
     }
     
@@ -124,26 +137,18 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      * @return A new RecordStream containing only records with resultCode != OK
      */
     public RecordStream failures() {
-        List<BatchRecord> failedRecords = new ArrayList<>();
+        List<RecordResult> failedRecords = new ArrayList<>();
         
         while (this.hasNext()) {
             RecordResult result = this.next();
             if (result.resultCode() != ResultCode.OK) {
-                // Convert RecordResult to BatchRecord for FixedSizeRecordStream
-                BatchRecord br = new BatchRecord(
-                    result.key(), 
-                    result.recordOrNull(), 
-                    result.resultCode(), 
-                    result.inDoubt(), 
-                    true
-                );
-                failedRecords.add(br);
+                failedRecords.add(result);
             }
         }
         
         // Return new RecordStream with filtered results
         // Using limit=0, pageSize=0, sortProperties=null for simple filtering
-        return new RecordStream(failedRecords, 0, 0, null);
+        return new RecordStream(failedRecords, 0L, 0, null, true);
     }
     
     /**

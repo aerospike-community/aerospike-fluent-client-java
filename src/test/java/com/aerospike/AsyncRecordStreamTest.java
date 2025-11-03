@@ -40,7 +40,7 @@ class AsyncRecordStreamTest {
     private RecordResult createResult(int id) {
         Key key = new Key("test", "set", id);
         Record record = new Record(null, 0, 0);
-        return new RecordResult(key, record);
+        return new RecordResult(key, record, 0); // index = 0 for test
     }
 
     @Nested

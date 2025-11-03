@@ -87,12 +87,15 @@ public class QueryExamples {
                     .maximumNumberOfCallAttempts(8)
                 )
             );
+            Behavior nonExceptionBehvaior = Behavior.DEFAULT.deriveWithChanges("nonException", builder -> 
+                builder.on(Selectors.all(), ops -> ops.stackTraceOnException(false)));
                 
             TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
 //            DataSet customerDataSet = DataSet.of("test", "person");
             
             Session session = cluster.createSession(newBehavior);
-
+            Session sessionWithoutExceptions = cluster.createSession(nonExceptionBehvaior);
+            
             Set<String> namespaces = session.info().namespaces();
             namespaces.forEach(ns -> {
                 Optional<NamespaceDetail> details = session.info().namespaceDetails(ns);
@@ -117,7 +120,6 @@ public class QueryExamples {
             
             
             DataSet users = DataSet.of("test", "users");
-            Key key = users.id("alice");
 
             RecordStream result = session.upsert(customerDataSet.id(80))
                     .bin("name").setTo("Tim")
@@ -138,7 +140,12 @@ public class QueryExamples {
                     .values("Tim", 342)
                     .values("Fred", 37)
                     .execute();
-            
+
+//            sessionWithoutExceptions.insert(customerDataSet.id(80))
+//                    .bin("name").setTo("Bob")
+//                    .execute()
+//                    .getFirst();
+
             session.upsert(customerDataSet.id(100))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(312)

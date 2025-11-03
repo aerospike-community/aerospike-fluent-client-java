@@ -60,7 +60,7 @@ import com.aerospike.dslobjects.BooleanExpression;
  * @see SortDir
  * @see SortProperties
  */
-public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder> {
+public class QueryBuilder extends com.aerospike.AbstractFilterableBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder> {
     private final QueryImpl implementation;
     private String[] binNames = null;
     private boolean withNoBins = false;
@@ -68,9 +68,6 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
     private int pageSize = 0;
     private int startPartition = 0;
     private int endPartition = 4096;
-    protected boolean respondAllKeys = false;
-    protected boolean failOnFilteredOut = false;
-    private WhereClauseProcessor dsl = null;
     private List<SortProperties> sortInfo = null;
     private Txn txnToUse;
     
@@ -375,15 +372,6 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
         return this.respondAllKeys;
     }
     
-    private void setWhereClause(WhereClauseProcessor clause) {
-        if (this.dsl == null) {
-            this.dsl = clause;
-        }
-        else {
-            throw new IllegalArgumentException("Only one 'where' clause can be specified. There is already one of '%s' and another is being set to '%s'"
-                    .formatted(this.dsl, clause));
-        }
-    }
     /**
      * Adds a filter condition using a DSL string.
      * 
@@ -408,17 +396,7 @@ public class QueryBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder>
      * @throws IllegalArgumentException if multiple filter conditions are specified
      */
     public QueryBuilder where(String dsl, Object ... params) {
-        WhereClauseProcessor impl;
-        if (dsl == null || dsl.isEmpty()) {
-            impl = null;
-        }
-        else if (params.length == 0) {
-            impl = WhereClauseProcessor.from(this.implementation.allowsSecondaryIndexQuery(), dsl);
-        }
-        else {
-            impl = WhereClauseProcessor.from(this.implementation.allowsSecondaryIndexQuery(), String.format(dsl, params));
-        }
-        setWhereClause(impl);
+        setWhereClause(createWhereClauseProcessor(this.implementation.allowsSecondaryIndexQuery(), dsl, params));
         return this;
     }
     

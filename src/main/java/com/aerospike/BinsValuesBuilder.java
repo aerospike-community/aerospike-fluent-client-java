@@ -16,6 +16,7 @@ import com.aerospike.client.BatchRecord;
 import com.aerospike.client.BatchWrite;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
+import com.aerospike.client.Record;
 import com.aerospike.client.Log;
 import com.aerospike.client.Operation;
 import com.aerospike.client.ResultCode;
@@ -27,9 +28,10 @@ import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.dsl.ParseResult;
 import com.aerospike.dslobjects.BooleanExpression;
+import com.aerospike.exception.AeroException;
 import com.aerospike.policy.Behavior.OpKind;
+import com.aerospike.policy.Settings;
 import com.aerospike.policy.Behavior.OpShape;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
@@ -38,7 +40,7 @@ import com.aerospike.query.WhereClauseProcessor;
  * Builder for the bins+values pattern in OperationBuilder.
  * This allows setting multiple bin names and then providing values for each record.
  */
-public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder> {
+public class BinsValuesBuilder extends AbstractFilterableBuilder implements FilterableOperation<BinsValuesBuilder> {
     private static class ValueData {
         private Object[] values;
         private int generation = 0;
@@ -56,9 +58,6 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
     private final List<Key> keys;
     private ValueData current = null;
     private Txn txnToUse;
-    protected WhereClauseProcessor dsl = null;
-    protected boolean respondAllKeys = false;
-    protected boolean failOnFilteredOut = false;
     
     public BinsValuesBuilder(OperationBuilder opBuilder, List<Key> keys, String binName, String... binNames) {
         this.opBuilder = opBuilder;
@@ -223,16 +222,6 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         return this;
     }
     
-    private void setWhereClause(WhereClauseProcessor clause) {
-        if (this.dsl == null) {
-            this.dsl = clause;
-        }
-        else {
-            throw new IllegalArgumentException("Only one 'where' clause can be specified. There is already one of '%s' and another is being set to '%s'"
-                    .formatted(this.dsl, clause));
-        }
-    }
-    
     /**
      * Apply a where clause filter to these operations. Only records matching the filter will be affected.
      * <p>
@@ -247,17 +236,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
      */
     @Override
     public BinsValuesBuilder where(String dsl, Object ... params) {
-        WhereClauseProcessor impl;
-        if (dsl == null || dsl.isEmpty()) {
-            impl = null;
-        }
-        else if (params.length == 0) {
-            impl = WhereClauseProcessor.from(false, dsl);
-        }
-        else {
-            impl = WhereClauseProcessor.from(false, String.format(dsl, params));
-        }
-        setWhereClause(impl);
+        setWhereClause(createWhereClauseProcessor(false, dsl, params));
         return this;
     }
     
@@ -358,7 +337,7 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         }
         
         if (keys.size() >= OperationBuilder.getBatchOperationThreshold()) {
-            return executeBatch();
+            return executeBatchSync();
         }
         else {
             return executeIndividualSync();
@@ -396,13 +375,196 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         }
         
         if (keys.size() >= OperationBuilder.getBatchOperationThreshold()) {
-            return executeBatch();
+            return executeBatchSync();
         }
         else {
             return executeIndividualAsync();
         }
     }
+    protected RecordStream executeBatchSync() {
+        Settings settings = opBuilder.getSession().getBehavior()
+                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace));
+        BatchPolicy batchPolicy = settings.asBatchPolicy();
+
+        batchPolicy.setTxn(txnToUse);
+        
+        // Apply where clause if present
+        batchPolicy.filterExp = keys.isEmpty() ? null : processWhereClause(keys.get(0).namespace, opBuilder.getSession());
+        batchPolicy.failOnFilteredOut = this.failOnFilteredOut;
+        
+        List<BatchRecord> batchRecords = new ArrayList<>(keys.size());
+
+        for (Key key : keys) {
+            ValueData valueSet = valueSets.get(key);
+            Operation[] ops = getOperationsForValueData(valueSet);
+
+            BatchWritePolicy bwp = new BatchWritePolicy();
+            // Fix: Apply policies even when generation is 0
+            if (valueSet.generation != 0) {
+                bwp.generation = valueSet.generation;
+                bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
+            }
+            bwp.expiration = getExpiration(valueSet);
+            bwp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opBuilder.opType);
+            batchRecords.add(new BatchWrite(bwp, key, ops));
+        }
+        batchPolicy.txn = this.txnToUse;
+        
+        opBuilder.getSession().getClient().operate(batchPolicy, batchRecords);
+        
+        List<RecordResult> results = new ArrayList<>();
+        for (int i = 0; i < keys.size(); i++) {
+            BatchRecord br = batchRecords.get(i);
+            if (switch (br.resultCode) {
+                case ResultCode.KEY_NOT_FOUND_ERROR -> respondAllKeys;
+                case ResultCode.FILTERED_OUT -> failOnFilteredOut || respondAllKeys;
+                default -> true;
+            }) {
+                if (settings.getStackTraceOnException() && br.resultCode != ResultCode.OK) {
+                    results.add(new RecordResult(br, AeroException.resultCodeToException(br.resultCode, null, br.inDoubt), i));
+                } else {
+                    results.add(new RecordResult(br, i));
+                }
+            }
+        }
+        
+        return new RecordStream(results, 0, 0, null, true);
+    }
     
+    
+    /**
+     * Execute operations synchronously for individual keys (< batch threshold).
+     * All virtual threads are joined before returning.
+     */
+    protected RecordStream executeIndividualSync() {
+        // Apply where clause if present
+        final Expression whereExp = keys.isEmpty() ? null : processWhereClause(keys.get(0).namespace, opBuilder.getSession());
+        
+        // Single key: synchronous execution
+        if (keys.size() == 1) {
+            Key key = keys.get(0);
+            ValueData valueSet = valueSets.get(key);
+            Operation[] ops = getOperationsForValueData(valueSet);
+            Settings settings = opBuilder.getSession().getBehavior()
+                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(key.namespace));
+            WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
+            wp.expiration = getExpiration(valueSet);
+            wp.txn = this.txnToUse;
+            wp.filterExp = whereExp;
+            wp.generation = valueSet.generation;
+            wp.generationPolicy = wp.generation == 0 ? GenerationPolicy.NONE : GenerationPolicy.EXPECT_GEN_EQUAL;
+            
+            boolean stackTraceOnException = settings.getStackTraceOnException();
+            
+            List<RecordResult> records = new ArrayList<>();
+            try {
+                Record record = opBuilder.getSession().getClient().operate(wp, key, ops);
+                if (respondAllKeys || record != null) {
+                    records.add(new RecordResult(key, record, 0));
+                }
+            } catch (AerospikeException ae) {
+                if (shouldPublishException(ae)) {
+                    if (ae.getResultCode() != ResultCode.FILTERED_OUT) {
+                        opBuilder.showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                    }
+                    records.add(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, 0));
+                }
+            }
+            return new RecordStream(records.toArray(new RecordResult[0]), 0, 0, null, false);
+        }
+        
+        // Multiple keys: parallel execution with virtual threads, JOINED before return
+        List<RecordResult> allRecords = new CopyOnWriteArrayList<>();
+        CountDownLatch latch = new CountDownLatch(keys.size());
+        
+        Settings settings = opBuilder.getSession().getBehavior()
+                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace));
+        boolean stackTraceOnException = settings.getStackTraceOnException();
+        
+        for (int i = 0; i < keys.size(); i++) {
+            final int index = i;
+            final Key key = keys.get(i);
+            ValueData valueSet = valueSets.get(key);
+            Thread.startVirtualThread(() -> {
+                try {
+                    Operation[] ops = getOperationsForValueData(valueSet);
+                    WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
+                    wp.expiration = getExpiration(valueSet);
+                    wp.txn = this.txnToUse;
+                    wp.filterExp = whereExp;
+                    wp.generation = valueSet.generation;
+                    wp.generationPolicy = wp.generation == 0 ? GenerationPolicy.NONE : GenerationPolicy.EXPECT_GEN_EQUAL;
+                    
+                    try {
+                        Record record = opBuilder.getSession().getClient().operate(wp, key, ops);
+                        if (respondAllKeys || record != null) {
+                            allRecords.add(new RecordResult(key, record, index));
+                        }
+                    } catch (AerospikeException ae) {
+                        if (shouldPublishException(ae)) {
+                            if (ae.getResultCode() != ResultCode.FILTERED_OUT) {
+                                opBuilder.showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                            }
+                            allRecords.add(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, index));
+                        }
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        // WAIT for all threads to complete
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting for operations to complete", e);
+        }
+        
+        return new RecordStream(allRecords.toArray(new RecordResult[0]), 0, 0, null, false);
+    }
+    
+    /**
+     * Execute operations asynchronously for individual keys (< batch threshold).
+     * Returns immediately; virtual threads complete in background.
+     */
+    protected RecordStream executeIndividualAsync() {
+        // Apply where clause if present
+        final Expression whereExp = keys.isEmpty() ? null : processWhereClause(keys.get(0).namespace, opBuilder.getSession());
+        
+        // Even single key: use async execution with virtual thread
+        AsyncRecordStream asyncStream = new AsyncRecordStream(keys.size());
+        AtomicInteger pendingOps = new AtomicInteger(keys.size());
+        
+        Settings settings = opBuilder.getSession().getBehavior()
+                .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace));
+        boolean stackTraceOnException = settings.getStackTraceOnException();
+        
+        for (int i = 0; i < keys.size(); i++) {
+            final int index = i;
+            final Key key = keys.get(i);
+            ValueData valueSet = valueSets.get(key);
+            Thread.startVirtualThread(() -> {
+                try {
+                    Operation[] ops = getOperationsForValueData(valueSet);
+                    WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
+                    wp.expiration = getExpiration(valueSet);
+                    wp.txn = this.txnToUse;
+                    wp.filterExp = whereExp;
+                    
+                    opBuilder.executeAndPublishSingleOperation(wp, key, ops, asyncStream, index, stackTraceOnException);
+                } finally {
+                    if (pendingOps.decrementAndGet() == 0) {
+                        asyncStream.complete();
+                    }
+                }
+            });
+        }
+        
+        return new RecordStream(asyncStream);
+    }
+
     private Operation[] getOperationsForValueData(ValueData valueData) {
         Object[] values = valueData.values;
         Operation[] ops = new Operation[binNames.length];
@@ -421,176 +583,5 @@ public class BinsValuesBuilder implements FilterableOperation<BinsValuesBuilder>
         }
     }
     
-    protected RecordStream executeBatch() {
-        BatchPolicy batchPolicy = opBuilder.getSession().getBehavior()
-                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace))
-                .asBatchPolicy();
-
-        batchPolicy.setTxn(txnToUse);
-        
-        // Apply where clause if present
-        Expression whereExp = null;
-        if (this.dsl != null && !keys.isEmpty()) {
-            ParseResult parseResult = this.dsl.process(keys.get(0).namespace, opBuilder.getSession());
-            whereExp = Exp.build(parseResult.getExp());
-        }
-        batchPolicy.filterExp = whereExp;
-        batchPolicy.failOnFilteredOut = this.failOnFilteredOut;
-        
-        List<BatchRecord> batchRecords = new ArrayList<>();
-        for (Key key : keys) {
-            ValueData valueSet = valueSets.get(key);
-            Operation[] ops = getOperationsForValueData(valueSet);
-            BatchWritePolicy bwp = new BatchWritePolicy();
-            // Fix: Apply policies even when generation is 0
-            if (valueSet.generation != 0) {
-                bwp.generation = valueSet.generation;
-                bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
-            }
-            bwp.expiration = getExpiration(valueSet);
-            bwp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opBuilder.opType);
-            batchRecords.add(new BatchWrite(bwp, key, ops));
-        }
-        batchPolicy.txn = this.txnToUse;
-        
-        opBuilder.getSession().getClient().operate(batchPolicy, batchRecords);
-        
-        // Handle respondAllKeys and filterExp behavior
-        if (!respondAllKeys && whereExp != null) {
-            // Remove any items which have been filtered out or not found
-            batchRecords.removeIf(br -> (br.resultCode == ResultCode.OK && br.record == null) 
-                    || (br.resultCode == ResultCode.KEY_NOT_FOUND_ERROR)
-                    || (br.resultCode == ResultCode.FILTERED_OUT && !failOnFilteredOut));
-        }
-        
-        return new RecordStream(batchRecords, 0, 0, null);
-    }
-    
-    /**
-     * Execute operations synchronously for individual keys (< batch threshold).
-     * All virtual threads are joined before returning.
-     */
-    protected RecordStream executeIndividualSync() {
-        Expression tempWhere = null;
-        // Apply where clause if present
-        if (this.dsl != null && !keys.isEmpty()) {
-            ParseResult parseResult = this.dsl.process(keys.get(0).namespace, opBuilder.getSession());
-            tempWhere = Exp.build(parseResult.getExp());
-        }
-        final Expression whereExp = tempWhere;
-        
-        // Single key: synchronous execution
-        if (keys.size() == 1) {
-            Key key = keys.get(0);
-            ValueData valueSet = valueSets.get(key);
-            Operation[] ops = getOperationsForValueData(valueSet);
-            WritePolicy wp = opBuilder.getWritePolicy(true, valueSet.generation, this.opBuilder.opType);
-            wp.expiration = getExpiration(valueSet);
-            wp.txn = this.txnToUse;
-            wp.filterExp = whereExp;
-            
-            List<BatchRecord> records = new ArrayList<>();
-            try {
-                com.aerospike.client.Record record = opBuilder.getSession().getClient().operate(wp, key, ops);
-                if (respondAllKeys || record != null) {
-                    records.add(new BatchRecord(key, record, true));
-                }
-            } catch (AerospikeException ae) {
-                if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
-                    if (failOnFilteredOut || respondAllKeys) {
-                        records.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
-                    }
-                } else {
-                    opBuilder.showWarningsOnException(ae, txnToUse, key, wp.expiration);
-                    records.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
-                }
-            }
-            return new RecordStream(records, 0, 0, null);
-        }
-        
-        // Multiple keys: parallel execution with virtual threads, JOINED before return
-        List<BatchRecord> allRecords = new CopyOnWriteArrayList<>();
-        CountDownLatch latch = new CountDownLatch(keys.size());
-        
-        for (Key key : keys) {
-            ValueData valueSet = valueSets.get(key);
-            Thread.startVirtualThread(() -> {
-                try {
-                    Operation[] ops = getOperationsForValueData(valueSet);
-                    WritePolicy wp = opBuilder.getWritePolicy(true, valueSet.generation, this.opBuilder.opType);
-                    wp.expiration = getExpiration(valueSet);
-                    wp.txn = this.txnToUse;
-                    wp.filterExp = whereExp;
-                    
-                    try {
-                        com.aerospike.client.Record record = opBuilder.getSession().getClient().operate(wp, key, ops);
-                        if (respondAllKeys || record != null) {
-                            allRecords.add(new BatchRecord(key, record, true));
-                        }
-                    } catch (AerospikeException ae) {
-                        if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
-                            if (failOnFilteredOut || respondAllKeys) {
-                                allRecords.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
-                            }
-                        } else {
-                            opBuilder.showWarningsOnException(ae, txnToUse, key, wp.expiration);
-                            allRecords.add(new BatchRecord(key, null, ae.getResultCode(), ae.getInDoubt(), true));
-                        }
-                    }
-                } finally {
-                    latch.countDown();
-                }
-            });
-        }
-        
-        // WAIT for all threads to complete
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while waiting for operations to complete", e);
-        }
-        
-        return new RecordStream(allRecords, 0, 0, null);
-    }
-    
-    /**
-     * Execute operations asynchronously for individual keys (< batch threshold).
-     * Returns immediately; virtual threads complete in background.
-     */
-    protected RecordStream executeIndividualAsync() {
-        Expression tempWhere = null;
-        // Apply where clause if present
-        if (this.dsl != null && !keys.isEmpty()) {
-            ParseResult parseResult = this.dsl.process(keys.get(0).namespace, opBuilder.getSession());
-            tempWhere = Exp.build(parseResult.getExp());
-        }
-        final Expression whereExp = tempWhere;
-        
-        // Even single key: use async execution with virtual thread
-        AsyncRecordStream asyncStream = new AsyncRecordStream(keys.size());
-        AtomicInteger pendingOps = new AtomicInteger(keys.size());
-        
-        for (Key key : keys) {
-            ValueData valueSet = valueSets.get(key);
-            Thread.startVirtualThread(() -> {
-                try {
-                    Operation[] ops = getOperationsForValueData(valueSet);
-                    WritePolicy wp = opBuilder.getWritePolicy(true, valueSet.generation, this.opBuilder.opType);
-                    wp.expiration = getExpiration(valueSet);
-                    wp.txn = this.txnToUse;
-                    wp.filterExp = whereExp;
-                    
-                    opBuilder.executeAndPublishSingleOperation(wp, key, ops, asyncStream);
-                } finally {
-                    if (pendingOps.decrementAndGet() == 0) {
-                        asyncStream.complete();
-                    }
-                }
-            });
-        }
-        
-        return new RecordStream(asyncStream);
-    }
 
 } 

@@ -58,19 +58,19 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
         policy.txn = this.getQueryBuilder().getTxnToUse();
         policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();
         if (!getQueryBuilder().isKeyInPartitionRange(key)) {
-            if (this.getQueryBuilder().respondAllKeys) {
+            if (this.getQueryBuilder().isRespondAllKeys()) {
                 return new RecordStream(key, null, true);
             }
             return new RecordStream();
         }
         try {
             if (getQueryBuilder().getWithNoBins()) {
-                return new RecordStream(key, getSession().getClient().getHeader(policy, key), this.getQueryBuilder().respondAllKeys);
+                return new RecordStream(key, getSession().getClient().getHeader(policy, key), this.getQueryBuilder().isRespondAllKeys());
             }
             else {
                 return new RecordStream(key, 
                         getSession().getClient().get(policy, key, getQueryBuilder().getBinNames()),
-                        this.getQueryBuilder().respondAllKeys
+                        this.getQueryBuilder().isRespondAllKeys()
                     );
             }
         }

@@ -47,13 +47,23 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
 
     /** For producers: push a result if we are still open. Blocks when backpressure applies. */
     public void publish(RecordResult result) {
-        if (result == null) return;
-        if (cancelled.getAsBoolean()) return; // best effort
+        if (result == null) {
+			return;
+		}
+        if (cancelled.getAsBoolean())
+		 {
+			return; // best effort
+		}
         // Block with backpressure, but wake up promptly if closed/completed
-        for (;;) {
-            if (cancelled.getAsBoolean()) return;
+        while (true) {
+            if (cancelled.getAsBoolean()) {
+				return;
+			}
             try {
-                if (queue.offer(result, 50, TimeUnit.MILLISECONDS)) return;
+                // TODO: Should this value be substantially larger?
+                if (queue.offer(result, 50, TimeUnit.MILLISECONDS)) {
+					return;
+				}
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 return;
@@ -129,7 +139,7 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
             }
 
             private Object fetch() {
-                for (;;) {
+                while (true) {
                     try {
                         Object o = queue.take();
                         if (o == END) {

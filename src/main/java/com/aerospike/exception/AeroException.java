@@ -44,6 +44,9 @@ public class AeroException extends RuntimeException {
     }
     
     public static AeroException resultCodeToException(int resultCode, String message, boolean inDoubt) {
+        if (message == null) {
+            message = ResultCode.getResultString(resultCode);
+        }
         switch (resultCode) {
         case ResultCode.QUOTA_EXCEEDED:
         case ResultCode.QUOTAS_NOT_ENABLED:
