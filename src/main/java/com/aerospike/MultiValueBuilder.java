@@ -299,7 +299,7 @@ public class MultiValueBuilder {
         bwp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opType);
         bwp.expiration = getExpiration(values);
         int generation = values.generation;
-        if (generation != 0) {
+        if (generation > 0) {
             bwp.generation = generation;
             bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
         }
@@ -320,7 +320,7 @@ public class MultiValueBuilder {
                 .map(valueSet -> toBatchWrite(valueSet))
                 .collect(Collectors.toList());
         
-        boolean result = session.getClient().operate(batchPolicy, batchRecords);
+        session.getClient().operate(batchPolicy, batchRecords);
         
         // TODO: Exception handling!
         Key[] keys = batchRecords.stream().map(batchRecord -> batchRecord.key).toArray(Key[]::new);
@@ -344,7 +344,7 @@ public class MultiValueBuilder {
         wp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opType);
         for (RecordValues theseValues : valueSets) {
             int generation = theseValues.generation;
-            if (generation != 0) {
+            if (generation > 0) {
                 wp.generation = generation;
                 wp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
             }

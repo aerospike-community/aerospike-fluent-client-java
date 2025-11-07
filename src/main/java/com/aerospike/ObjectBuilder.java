@@ -38,7 +38,7 @@ public class ObjectBuilder<T> {
     private final OperationObjectBuilder<T> opBuilder;
     private final List<T> elements;
     private RecordMapper<T> recordMapper;
-    private int generation = -1;
+    private int generation = 0;
     private long expirationInSeconds = 0;
     private long expirationInSecondsForAll = 0;
     private Txn txnToUse;
@@ -65,6 +65,9 @@ public class ObjectBuilder<T> {
     }
     
     public ObjectBuilder<T> ensureGenerationIs(int generation) {
+        if (generation <= 0) {
+            throw new IllegalArgumentException("Generation must be greater than 0");
+        }
         this.generation = generation;
         return this;
     }
@@ -386,7 +389,7 @@ public class ObjectBuilder<T> {
                 .asWritePolicy();
 
         wp.txn = this.txnToUse;
-        if (generation >= 0) {
+        if (generation > 0) {
             wp.generation = generation;
             wp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
         }
@@ -439,7 +442,7 @@ public class ObjectBuilder<T> {
 
                 wp.txn = this.txnToUse;
                 
-                if (generation >= 0) {
+                if (generation > 0) {
                     wp.generation = generation;
                     wp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
                 }
@@ -569,7 +572,7 @@ public class ObjectBuilder<T> {
                     boolean stackTraceOnException = settings.getStackTraceOnException();
                     wp.txn = this.txnToUse;
                     
-                    if (generation >= 0) {
+                    if (generation > 0) {
                         wp.generation = generation;
                         wp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
                     }
@@ -633,7 +636,7 @@ public class ObjectBuilder<T> {
                     boolean stackTraceOnException = settings.getStackTraceOnException();
                     wp.txn = this.txnToUse;
                     
-                    if (generation >= 0) {
+                    if (generation > 0) {
                         wp.generation = generation;
                         wp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
                     }
@@ -710,7 +713,7 @@ public class ObjectBuilder<T> {
             
             BatchWritePolicy bwp = new BatchWritePolicy();
             bwp.sendKey = batchPolicy.sendKey;
-            if (generation != 0) {
+            if (generation > 0) {
                 bwp.generation = generation;
                 bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
             }

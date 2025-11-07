@@ -86,7 +86,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
                     }
                 }
             }
-            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), limit, (int)statement.getMaxRecords(), sortProperties, false);
+            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), 0, (int)statement.getMaxRecords(), sortProperties, false);
         }
     }
     
@@ -190,6 +190,65 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
             }
         }
         return Optional.empty();
+    }
+    
+    /**
+     * Converts this RecordStream into a NavigatableRecordStream for in-memory sorting and pagination.
+     * 
+     * <p>This method reads all records from the current stream into memory and returns a
+     * NavigatableRecordStream that provides builder-style APIs for sorting and pagination.
+     * This is useful when you need to sort results after fetching them from the database,
+     * or when you want to paginate through results in a different way than the original query.</p>
+     * 
+     * <p>Example usage:</p>
+     * <pre>
+     * RecordStream results = session.query(customerDataSet).execute();
+     * NavigatableRecordStream navigatable = results.asNavigatableStream()
+     *     .pageSize(20)
+     *     .sortBy(List.of(
+     *         SortProperties.ascending("name"),
+     *         SortProperties.descending("age")
+     *     ));
+     * 
+     * // Iterate through pages
+     * while (navigatable.hasMorePages()) {
+     *     while (navigatable.hasNext()) {
+     *         RecordResult record = navigatable.next();
+     *         // Process record
+     *     }
+     * }
+     * </pre>
+     * 
+     * <p><b>Warning:</b> This method loads all records into memory. For large result sets,
+     * consider using the limit parameter in {@link #asNavigatableStream(long)} to avoid
+     * excessive memory usage.</p>
+     * 
+     * @return a NavigatableRecordStream containing all records from this stream
+     */
+    public NavigatableRecordStream asNavigatableStream() {
+        return new NavigatableRecordStream(this);
+    }
+    
+    /**
+     * Converts this RecordStream into a NavigatableRecordStream with a record limit.
+     * 
+     * <p>This method reads records from the current stream into memory up to the specified
+     * limit and returns a NavigatableRecordStream that provides builder-style APIs for
+     * sorting and pagination.</p>
+     * 
+     * <p>Example usage:</p>
+     * <pre>
+     * RecordStream results = session.query(customerDataSet).execute();
+     * NavigatableRecordStream navigatable = results.asNavigatableStream(1000)
+     *     .pageSize(20)
+     *     .sortBy(SortProperties.descending("age"));
+     * </pre>
+     * 
+     * @param limit the maximum number of records to load into memory (0 or negative means no limit)
+     * @return a NavigatableRecordStream containing up to limit records from this stream
+     */
+    public NavigatableRecordStream asNavigatableStream(long limit) {
+        return new NavigatableRecordStream(this, limit);
     }
     
     public void forEach(Consumer<RecordResult> consumer) {

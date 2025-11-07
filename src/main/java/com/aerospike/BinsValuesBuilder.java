@@ -108,6 +108,9 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     }
     
     public BinsValuesBuilder ensureGenerationIs(int generation) {
+        if (generation <= 0) {
+            throw new IllegalArgumentException("Generation must be greater than 0");
+        }
         checkValuesExist("ensureGenerationIs");
         current.generation = generation;
         return this;
@@ -399,8 +402,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             Operation[] ops = getOperationsForValueData(valueSet);
 
             BatchWritePolicy bwp = new BatchWritePolicy();
-            // Fix: Apply policies even when generation is 0
-            if (valueSet.generation != 0) {
+            if (valueSet.generation > 0) {
                 bwp.generation = valueSet.generation;
                 bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
             }
@@ -452,7 +454,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             wp.txn = this.txnToUse;
             wp.filterExp = whereExp;
             wp.generation = valueSet.generation;
-            wp.generationPolicy = wp.generation == 0 ? GenerationPolicy.NONE : GenerationPolicy.EXPECT_GEN_EQUAL;
+            wp.generationPolicy = wp.generation <= 0 ? GenerationPolicy.NONE : GenerationPolicy.EXPECT_GEN_EQUAL;
             
             boolean stackTraceOnException = settings.getStackTraceOnException();
             
@@ -493,7 +495,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
                     wp.txn = this.txnToUse;
                     wp.filterExp = whereExp;
                     wp.generation = valueSet.generation;
-                    wp.generationPolicy = wp.generation == 0 ? GenerationPolicy.NONE : GenerationPolicy.EXPECT_GEN_EQUAL;
+                    wp.generationPolicy = wp.generation <= 0 ? GenerationPolicy.NONE : GenerationPolicy.EXPECT_GEN_EQUAL;
                     
                     try {
                         Record record = opBuilder.getSession().getClient().operate(wp, key, ops);

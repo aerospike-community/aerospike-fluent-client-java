@@ -168,6 +168,9 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
     }
 
     public OperationBuilder ensureGenerationIs(int generation) {
+        if (generation <= 0) {
+            throw new IllegalArgumentException("Generation must be greater than 0");
+        }
         this.generation = generation;
         return this;
     }
@@ -428,7 +431,7 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
     }
     
     public GenerationPolicy getGenerationPolicy(int generation) {
-        return generation != 0 ? GenerationPolicy.EXPECT_GEN_EQUAL : GenerationPolicy.NONE;
+        return generation > 0 ? GenerationPolicy.EXPECT_GEN_EQUAL : GenerationPolicy.NONE;
     }
     
     protected WritePolicy getWritePolicy(Settings settings, int generation, OpType opType) {
