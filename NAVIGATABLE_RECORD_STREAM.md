@@ -15,9 +15,10 @@
 - Sort by multiple fields with different directions (ascending/descending)
 - Case-sensitive and case-insensitive sorting options
 - Dynamic re-sorting without re-querying the database
-- Two sorting APIs:
-  - **Builder-style** (cumulative): Chain `sortBy()` calls to add sort criteria
-  - **Sortable interface** (replacement): Replace entire sort with single call
+- Sorting API replaces criteria on each call:
+  - **Single field**: `sortBy(String field, SortDir, boolean caseSensitive)`
+  - **Multiple fields**: `sortBy(List<SortProperties>)`
+  - Use static factory methods: `SortProperties.ascending()`, `SortProperties.descending()`, etc.
 
 ### 3. **Flexible Pagination**
 - Configurable page size
@@ -27,10 +28,10 @@
 - Navigate backward by jumping to earlier pages
 
 ### 4. **Integration with Existing APIs**
-- Implements `Sortable` interface
-- Implements `ResettablePagination` interface
-- Implements `Closeable` interface
+- Implements `ResettablePagination` interface for page navigation
+- Implements `Closeable` interface for resource management
 - Provides familiar methods like `toObjectList()`, `stream()`, `forEach()`
+- Uses `SortProperties` record with convenient static factory methods
 
 ## Files Created/Modified
 
@@ -70,30 +71,22 @@ NavigatableRecordStream nav = results.asNavigatableStream(1000);
 
 ### Sorting
 
-#### Builder-Style API (Cumulative)
-
 ```java
-// Add multiple sort criteria
-nav.sortBy("name")                              // Primary sort
-   .sortBy("age", SortDir.SORT_DESC);          // Secondary sort
+// Single field sorting (replaces any existing sort)
+nav.sortBy("name");                                    // Ascending, case-sensitive
+nav.sortBy("age", SortDir.SORT_DESC);                  // Descending
+nav.sortBy("name", SortDir.SORT_ASC, false);          // Ascending, case-insensitive
 
-// Replace sort criteria
-nav.clearSort().sortBy("age");                 // Only sort by age
-
-// Full control
-nav.sortBy("name", SortDir.SORT_ASC, false);  // Case-insensitive
-```
-
-#### Sortable Interface (Replacement)
-
-```java
-// Replace with single criterion
-nav.sortBy(new SortProperties("age", SortDir.SORT_DESC, true));
-
-// Replace with multiple criteria
+// Multi-column sorting with static factory methods
 nav.sortBy(List.of(
-    new SortProperties("name", SortDir.SORT_ASC, true),
-    new SortProperties("age", SortDir.SORT_DESC, true)
+    SortProperties.ascending("name"),
+    SortProperties.descending("age")
+));
+
+// Case-insensitive sorting
+nav.sortBy(List.of(
+    SortProperties.ascendingIgnoreCase("lastName"),
+    SortProperties.ascendingIgnoreCase("firstName")
 ));
 ```
 
@@ -143,39 +136,31 @@ int size = nav.size();
 
 ## Sorting Behavior Details
 
-### Important: Cumulative vs Replacement
+### Important: Sort Replacement
 
-The builder-style `sortBy(String, ...)` methods are **cumulative**, meaning each call adds a new sort criterion. This design matches `QueryBuilder` and allows natural multi-column sorting:
+Each call to `sortBy()` **replaces** the entire sort criteria. This makes it predictable and easy to understand:
 
 ```java
-nav.sortBy("lastName", SortDir.SORT_ASC)
-   .sortBy("firstName", SortDir.SORT_ASC)
-   .sortBy("age", SortDir.SORT_DESC);
-```
+// Single field - sorts by age only
+nav.sortBy("age", SortDir.SORT_DESC);
 
-To replace the sort criteria entirely, use one of these approaches:
+// Multi-field - sorts by lastName, then firstName, then age
+nav.sortBy(List.of(
+    SortProperties.ascending("lastName"),
+    SortProperties.ascending("firstName"),
+    SortProperties.descending("age")
+));
 
-**Option 1: Clear first**
-```java
-nav.clearSort().sortBy("age");
-```
-
-**Option 2: Use Sortable interface**
-```java
-nav.sortBy(new SortProperties("age", SortDir.SORT_DESC, true));
-```
-
-**Option 3: Use Sortable interface with list**
-```java
-nav.sortBy(List.of(new SortProperties("age", SortDir.SORT_DESC, true)));
+// Change sort - now sorts only by name
+nav.sortBy("name");
 ```
 
 ### Sort Order Precedence
 
-Sorts are applied in the order they are added:
-1. First `sortBy()` call = primary sort
-2. Second `sortBy()` call = secondary sort
-3. Third `sortBy()` call = tertiary sort
+For multi-field sorting, sorts are applied in list order:
+1. First item in list = primary sort
+2. Second item in list = secondary sort
+3. Third item in list = tertiary sort
 4. And so on...
 
 ## Example Scenarios
@@ -190,7 +175,7 @@ NavigatableRecordStream nav = results.asNavigatableStream()
     .sortBy("name");
 
 // User changes sort order (no database query!)
-nav.clearSort().sortBy("age", SortDir.SORT_DESC);
+nav.sortBy("age", SortDir.SORT_DESC);
 nav.reset();  // Start from beginning with new sort
 ```
 
@@ -205,14 +190,15 @@ nav.sortBy("name");
 processFirstPage(nav);
 
 // Compare with sort by age (no re-query!)
-nav.clearSort().sortBy("age", SortDir.SORT_DESC);
+nav.sortBy("age", SortDir.SORT_DESC);
 nav.reset();
 processFirstPage(nav);
 
-// Compare with sort by name then age
-nav.clearSort()
-   .sortBy("name")
-   .sortBy("age", SortDir.SORT_DESC);
+// Compare with multi-column sort by name then age
+nav.sortBy(List.of(
+    SortProperties.ascending("name"),
+    SortProperties.descending("age")
+));
 nav.reset();
 processFirstPage(nav);
 ```
@@ -254,10 +240,10 @@ while (nav.hasMorePages()) {
 - Working with a bounded result set that fits in memory
 
 **Don't use NavigatableRecordStream when:**
-- Working with millions of records
-- Sort criteria known upfront (use `QueryBuilder.sortReturnedSubsetBy()`)
-- Only need forward-only pagination
+- Working with very large datasets that won't fit in memory
+- Only need forward-only iteration (use `ChunkedRecordStream` via `chunkSize()`)
 - Memory is constrained
+- Processing billions of records
 
 ### Performance Characteristics
 
@@ -267,31 +253,38 @@ while (nav.hasMorePages()) {
 - **Page jumping**: O(1) - direct array access
 - **Iteration**: O(1) per record
 
-## Comparison with QueryBuilder Sorting
+## Comparison: Server-Side Chunking vs Client-Side Sorting
 
-### QueryBuilder Approach (Database-Side)
+### Server-Side Chunking (ChunkedRecordStream)
 
 ```java
+// For processing huge datasets - billions of records possible
 RecordStream results = session.query(customerDataSet)
-    .sortReturnedSubsetBy("age", SortDir.SORT_DESC)
-    .limit(1000)  // Required for sorting
-    .pageSize(20)
+    .chunkSize(5000)  // Fetch 5000 records per server call
     .execute();
+
+// Process in chunks
+while (results.hasMoreChunks()) {
+    while (results.hasNext()) {
+        processRecord(results.next());
+    }
+}
 ```
 
 **Pros:**
-- Works with any size dataset
-- Memory efficient
+- Works with unlimited dataset sizes
+- Very memory efficient
+- Forward-only streaming
 
 **Cons:**
-- Sort criteria must be known upfront
-- Cannot change sort without re-querying
-- Requires a limit
-- Cannot navigate backward
+- No sorting capability
+- No backward navigation
+- Cannot jump to specific positions
 
-### NavigatableRecordStream Approach (In-Memory)
+### Client-Side Sorting/Pagination (NavigatableRecordStream)
 
 ```java
+// For datasets that fit in memory
 RecordStream results = session.query(customerDataSet)
     .limit(1000)
     .execute();
@@ -301,7 +294,7 @@ NavigatableRecordStream nav = results.asNavigatableStream()
     .sortBy("age", SortDir.SORT_DESC);
 
 // Later, change sort without re-querying
-nav.clearSort().sortBy("name");
+nav.sortBy("name");
 ```
 
 **Pros:**
@@ -350,9 +343,9 @@ The example will:
 
 The implementation is designed to integrate seamlessly with existing code:
 - Uses existing `RecordComparator` for sorting
-- Uses existing `SortProperties` and `SortDir` classes
-- Implements existing `Sortable` and `ResettablePagination` interfaces
-- Follows the same patterns as `FixedSizeRecordStream`
+- Uses `SortProperties` record with convenient static factory methods
+- Implements existing `ResettablePagination` interface
+- Follows familiar patterns for pagination and sorting
 
 ## Future Enhancements (Optional)
 

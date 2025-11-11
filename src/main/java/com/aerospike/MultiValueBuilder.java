@@ -21,9 +21,11 @@ import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
+import com.aerospike.exception.AeroException;
 // CommandType removed - using new Behavior API
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
+import com.aerospike.policy.Settings;
 
 /**
  * Builder for operations that can handle multiple sets of values for multiple keys.
@@ -290,7 +292,7 @@ public class MultiValueBuilder {
         }
 
     }
-    private BatchWrite toBatchWrite(RecordValues values) {
+    private BatchWrite toBatchWrite(Settings settings, RecordValues values) {
         Operation[] ops = new Operation[binNames.length];
         for (int i = 0; i < binNames.length; i++) {
             ops[i] = Operation.add(new Bin(binNames[i], Value.get(values.values[i])));
@@ -303,7 +305,9 @@ public class MultiValueBuilder {
             bwp.generation = generation;
             bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
         }
-        
+        bwp.sendKey = settings.getSendKey();
+        bwp.durableDelete = settings.getUseDurableDelete();
+
         return new BatchWrite(values.key, ops);
     }
     
@@ -311,35 +315,42 @@ public class MultiValueBuilder {
         // TODO: In the real client we will just stream these back to the stream asynchronously,
         // but for now we're going to do everything sync.
 //        List<BatchRecord>
-        BatchPolicy batchPolicy = session.getBehavior()
+        Settings settings = session.getBehavior()
                 .getSettings(OpKind.WRITE_RETRYABLE, OpShape.BATCH, 
-                        session.isNamespaceSC(valueSets.get(0).key.namespace)).asBatchPolicy();
+                        session.isNamespaceSC(valueSets.get(0).key.namespace));
+        BatchPolicy batchPolicy = settings.asBatchPolicy();
         batchPolicy.txn = this.txnToUse;
         
         List<BatchRecord> batchRecords = valueSets.stream()
-                .map(valueSet -> toBatchWrite(valueSet))
+                .map(valueSet -> toBatchWrite(settings, valueSet))
                 .collect(Collectors.toList());
         
         session.getClient().operate(batchPolicy, batchRecords);
         
-        // TODO: Exception handling!
-        Key[] keys = batchRecords.stream().map(batchRecord -> batchRecord.key).toArray(Key[]::new);
-        Record[] records = batchRecords.stream().map(batchRecord -> batchRecord.record).toArray(Record[]::new);
-        return new RecordStream(keys, records, 0, 0, null, true);
+        AsyncRecordStream stream = new AsyncRecordStream(batchRecords.size());
+        try {
+            for (int i = 0; i < batchRecords.size(); i++) {
+                BatchRecord br = batchRecords.get(i);
+                // TODO: Should this have a respondAllKeys or failOnFilteredOut handler? See AbstractFilterableBuilder.shouldIncludeResult
+                stream.publish(AbstractFilterableBuilder.createRecordResultFromBatchRecord(br, settings, i));
+            }
+            
+            return new RecordStream(stream);
+        }
+        finally {
+            stream.complete();
+        }
     }
     
     private RecordStream executeViaSingleOperations() {
-        // TODO: In the real client we will just stream these back to the stream asynchronously,
-        // but for now we're going to do everything sync.
-        Key[] keys = new Key[valueSets.size()];
-        Record[] records = new Record[valueSets.size()];
-        AerospikeException[] exceptions = new AerospikeException[valueSets.size()];
+        AsyncRecordStream stream = new AsyncRecordStream(valueSets.size());
         
         int count = 0;
         
-        WritePolicy wp = session.getBehavior()
+        Settings settings =session.getBehavior()
                 .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, 
-                        session.isNamespaceSC(valueSets.get(0).key.namespace)).asWritePolicy();
+                        session.isNamespaceSC(valueSets.get(0).key.namespace)); 
+        WritePolicy wp = settings.asWritePolicy();
         
         wp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opType);
         for (RecordValues theseValues : valueSets) {
@@ -350,29 +361,20 @@ public class MultiValueBuilder {
             }
             wp.txn = this.txnToUse;
             wp.expiration = getExpiration(theseValues);
-            Record record = null;
-            AerospikeException aerospikeException = null;
             try {
                 Operation[] ops = new Operation[binNames.length];
                 for (int i = 0; i < binNames.length; i++) {
                     ops[i] = Operation.add(new Bin(binNames[i], Value.get(theseValues.values[i])));
                 }
-                record = session.getClient().operate(wp, theseValues.key, ops);
+                Record record = session.getClient().operate(wp, theseValues.key, ops);
+                stream.publish(new RecordResult(theseValues.key, record, count++));
             }
             catch (AerospikeException ae) {
-                aerospikeException = ae; 
-                throw ae;
-            }
-            finally {
-                keys[count] = theseValues.key;
-                exceptions[count] = aerospikeException;
-                records[count++] = record;
+                stream.publish(new RecordResult(theseValues.key, AeroException.from(ae), count++));
             }
         }
-        // TODO: need to handle exceptions
+        return new RecordStream(stream.complete());
         // TODO: If we use REPLACE we get write_master: modify op can't have record-level replace flag 1693171444c19e9c821d842b806388566df2949d
         // Raise with Brian N?
-        return new RecordStream(keys, records, 0, 0, null, true);
     }
-
 } 

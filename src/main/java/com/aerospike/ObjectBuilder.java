@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -16,6 +15,7 @@ import com.aerospike.client.BatchRecord;
 import com.aerospike.client.BatchWrite;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
+import com.aerospike.client.Log;
 import com.aerospike.client.Operation;
 import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
@@ -28,11 +28,11 @@ import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dsl.ParseResult;
-import com.aerospike.policy.Settings;
 import com.aerospike.exception.AeroException;
 import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
+import com.aerospike.policy.Settings;
 
 public class ObjectBuilder<T> {
     private final OperationObjectBuilder<T> opBuilder;
@@ -331,7 +331,7 @@ public class ObjectBuilder<T> {
     }
     
     private int getExpirationAsInt(long expirationInSeconds) {
-        if (expirationInSeconds > (long)Integer.MAX_VALUE) {
+        if (expirationInSeconds > Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }
         else {
@@ -405,17 +405,18 @@ public class ObjectBuilder<T> {
         }
         
         try {
-        Record record = this.opBuilder.getSession().getClient().operate(
-                wp,
-                key,
-                operations
-            );
-                
-        return new RecordStream(key, record, true);
+            Record record = this.opBuilder.getSession().getClient().operate(
+                    wp,
+                    key,
+                    operations
+                );
+                    
+            return new RecordStream(key, record);
         } catch (AerospikeException ae) {
             if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
                 if (opBuilder.isFailOnFilteredOut() || opBuilder.isRespondAllKeys()) {
-                    return new RecordStream(key, null, true);
+                    AeroException ae1 = AeroException.from(ae);
+                    return new RecordStream(new RecordResult(key, ae1, 0));
                 }
                 // Otherwise return empty stream
                 return new RecordStream();
@@ -493,8 +494,8 @@ public class ObjectBuilder<T> {
      * @return RecordStream containing the results
      */
     public RecordStream executeSync() {
-        if (com.aerospike.client.Log.debugEnabled()) {
-            com.aerospike.client.Log.debug("ObjectBuilder.executeSync() called for " + elements.size() + " element(s), transaction: " + 
+        if (Log.debugEnabled()) {
+            Log.debug("ObjectBuilder.executeSync() called for " + elements.size() + " element(s), transaction: " + 
                      (txnToUse != null ? "yes" : "no"));
         }
         
@@ -519,13 +520,13 @@ public class ObjectBuilder<T> {
      * @return RecordStream that will be populated as results arrive
      */
     public RecordStream executeAsync() {
-        if (com.aerospike.client.Log.debugEnabled()) {
-            com.aerospike.client.Log.debug("ObjectBuilder.executeAsync() called for " + elements.size() + " element(s), transaction: " + 
+        if (Log.debugEnabled()) {
+            Log.debug("ObjectBuilder.executeAsync() called for " + elements.size() + " element(s), transaction: " + 
                      (txnToUse != null ? "yes" : "no"));
         }
         
-        if (this.txnToUse != null && com.aerospike.client.Log.warnEnabled()) {
-            com.aerospike.client.Log.warn(
+        if (this.txnToUse != null && Log.warnEnabled()) {
+            Log.warn(
                 "executeAsync() called within a transaction. " +
                 "Async operations may still be in flight when commit() is called, " +
                 "which could lead to inconsistent state. " +
@@ -552,9 +553,9 @@ public class ObjectBuilder<T> {
         // Apply where clause if present
         final Expression whereExp = processWhereClauseForElements();
         
-        List<RecordResult> allRecords = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(elements.size());
         
+        AsyncRecordStream recordStream = new AsyncRecordStream(elements.size());
         for (int i = 0; i < elements.size(); i++) {
             final int index = i;
             final T element = elements.get(i);
@@ -582,13 +583,13 @@ public class ObjectBuilder<T> {
                     wp.filterExp = whereExp;
                     
                     try {
-                        com.aerospike.client.Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
+                        Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
                         if (opBuilder.isRespondAllKeys() || record != null) {
-                            allRecords.add(new RecordResult(key, record, index));
+                            recordStream.publish(new RecordResult(key, record, index));
                         }
                     } catch (AerospikeException ae) {
                         if (shouldPublish(ae, opBuilder)) {
-                            allRecords.add(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, index));
+                            recordStream.publish(new RecordResult(key, AeroException.from(ae), index));
                         }
                     }
                 } finally {
@@ -604,8 +605,11 @@ public class ObjectBuilder<T> {
             Thread.currentThread().interrupt();
             throw new RuntimeException("Interrupted while waiting for operations to complete", e);
         }
+        finally {
+            recordStream.complete();
+        }
         
-        return new RecordStream(allRecords.toArray(new RecordResult[0]), 0, 0, null, false);
+        return new RecordStream(recordStream);
     }
     
     /**
@@ -700,46 +704,50 @@ public class ObjectBuilder<T> {
         long effectiveExpiration = (expirationInSeconds != 0) ? expirationInSeconds : expirationInSecondsForAll;
         int expirationAsInt = getExpirationAsInt(effectiveExpiration);
 
-        BatchPolicy batchPolicy = this.opBuilder.getSession().getBehavior()
-                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, Mode.ANY)
-                .asBatchPolicy();
+        Settings settings = this.opBuilder.getSession().getBehavior()
+                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, Mode.ANY);
+        BatchPolicy batchPolicy = settings.asBatchPolicy();
+        
         batchPolicy.failOnFilteredOut = opBuilder.isFailOnFilteredOut();
         batchPolicy.filterExp = whereExp;
 
-        for (T element : elements) {
-            RecordMapper<T> recordMapper = getMapper(element);
-            Key key = getKeyForElement(recordMapper, element);
-            Operation[] operations = operationsForElement(recordMapper, element);
+        AsyncRecordStream recordStream = new AsyncRecordStream(elements.size());
+        try {
+            for (T element : elements) {
+                RecordMapper<T> recordMapper = getMapper(element);
+                Key key = getKeyForElement(recordMapper, element);
+                Operation[] operations = operationsForElement(recordMapper, element);
+                
+                BatchWritePolicy bwp = new BatchWritePolicy();
+                bwp.sendKey = batchPolicy.sendKey;
+                if (generation > 0) {
+                    bwp.generation = generation;
+                    bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
+                }
+                bwp.expiration = expirationAsInt;
+                bwp.durableDelete = settings.getUseDurableDelete();
+
+                batchWrites.add(new BatchWrite(bwp, key, operations));
+            }
+        
+            batchPolicy.setTxn(this.txnToUse);
             
-            BatchWritePolicy bwp = new BatchWritePolicy();
-            bwp.sendKey = batchPolicy.sendKey;
-            if (generation > 0) {
-                bwp.generation = generation;
-                bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
+            this.opBuilder.getSession().getClient().operate(
+                    batchPolicy,
+                    batchWrites);
+            
+            // Convert BatchRecord to RecordResult with proper stack trace handling
+            for (int i = 0; i < batchWrites.size(); i++) {
+                BatchRecord br = batchWrites.get(i);
+                if (opBuilder.shouldIncludeResult(br.resultCode)) {
+                    recordStream.publish(opBuilder.createRecordResultFromBatchRecord(br, settings, i));
+                }
             }
-            bwp.expiration = expirationAsInt;
-
-            batchWrites.add(new BatchWrite(bwp, key, operations));
+            
+            return new RecordStream(recordStream);
         }
-
-        batchPolicy.setTxn(this.txnToUse);
-        
-        this.opBuilder.getSession().getClient().operate(
-                batchPolicy,
-                batchWrites);
-        
-        // Convert BatchRecord to RecordResult with proper stack trace handling
-        Settings settings = this.opBuilder.getSession().getBehavior()
-                .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, Mode.ANY);
-        
-        List<RecordResult> results = new ArrayList<>();
-        for (int i = 0; i < batchWrites.size(); i++) {
-            BatchRecord br = batchWrites.get(i);
-            if (opBuilder.shouldIncludeResult(br.resultCode)) {
-                results.add(opBuilder.createRecordResultFromBatchRecord(br, settings, i));
-            }
+        finally {
+            recordStream.complete();
         }
-        
-        return new RecordStream(results, 0, 0, null, true);
     }
 }

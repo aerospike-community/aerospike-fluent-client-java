@@ -124,6 +124,13 @@ public interface CdtContextInvertableBuilder extends CdtActionInvertableBuilder 
     public CdtContextInvertableBuilder onMapKeyList(List<?> keys);
     public CdtContextInvertableBuilder onMapValueList(List<?> values);
 
+    public CdtContextNonInvertableBuilder onListIndex(int index);
+    public CdtContextNonInvertableBuilder onListIndex(int index, ListOrder order, boolean pad);
+    public CdtContextNonInvertableBuilder onListRank(int index);
+    public CdtContextInvertableBuilder onListValue(long value);
+    public CdtContextInvertableBuilder onListValue(String value);
+    public CdtContextInvertableBuilder onListValue(byte[] value);
+
     public OperationBuilder mapClear();
     public OperationBuilder mapSize();
     

@@ -6,7 +6,25 @@ import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
 import com.aerospike.query.RecordStreamImpl;
 
-public class PaginatedRecordStream implements RecordStreamImpl {
+/**
+ * A RecordStreamImpl that supports server-side streaming with chunking.
+ * 
+ * <p>This implementation fetches records in chunks from the server, allowing for
+ * efficient processing of large result sets without loading all data into memory.
+ * The chunks are fetched on-demand as the client iterates through the results.</p>
+ * 
+ * <p>This is distinct from client-side pagination provided by {@link NavigatableRecordStream},
+ * which loads all data into memory and provides bi-directional navigation and sorting.</p>
+ * 
+ * <p><b>Key characteristics:</b></p>
+ * <ul>
+ *   <li>Forward-only iteration</li>
+ *   <li>No sorting capability</li>
+ *   <li>Suitable for billions of records</li>
+ *   <li>Low memory footprint</li>
+ * </ul>
+ */
+public class ChunkedRecordStream implements RecordStreamImpl {
     private final QueryPolicy queryPolicy;
     private final Statement statement;
     private final PartitionFilter filter;
@@ -15,7 +33,7 @@ public class PaginatedRecordStream implements RecordStreamImpl {
     private final Session session;
     private long recordCount = 0;
     
-    public PaginatedRecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
+    public ChunkedRecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
             PartitionFilter filter, RecordSet recordSet, long limit) {
 
         this.queryPolicy = queryPolicy;
@@ -27,7 +45,7 @@ public class PaginatedRecordStream implements RecordStreamImpl {
     }
     
     @Override
-    public boolean hasMorePages() {
+    public boolean hasMoreChunks() {
         if (limit > 0 && recordCount >= limit) {
             return false;
         }
@@ -41,7 +59,7 @@ public class PaginatedRecordStream implements RecordStreamImpl {
         }
         boolean result = recordSet.next();
         if (!result) {
-            // Move onto the next page
+            // Move onto the next chunk
             recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
         }
         else {
@@ -62,3 +80,4 @@ public class PaginatedRecordStream implements RecordStreamImpl {
         }
     }
 }
+

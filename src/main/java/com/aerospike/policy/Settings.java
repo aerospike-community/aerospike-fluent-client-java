@@ -48,34 +48,98 @@ public final class Settings {
     ReadModeSC readModeSC; // CP
     Integer resetTtlOnReadAtPercent;
 
+    Settings() {}
+
+    public Settings(Settings orig) {
+        this.abandonCallAfter = orig.abandonCallAfter;
+        this.delayBetweenRetries = orig.delayBetweenRetries;
+        this.maximumNumberOfCallAttempts = orig.maximumNumberOfCallAttempts;
+        this.replicaOrder = orig.replicaOrder;
+        this.sendKey = orig.sendKey;
+        this.useCompression = orig.useCompression;
+        this.waitForCallToComplete = orig.waitForCallToComplete;
+        this.waitForConnectionToComplete = orig.waitForConnectionToComplete;
+        this.waitForSocketResponseAfterCallFails = orig.waitForSocketResponseAfterCallFails;
+        this.recordQueueSize = orig.recordQueueSize;
+        this.maxConcurrentNodes = orig.maxConcurrentNodes;
+        this.allowInlineMemoryAccess = orig.allowInlineMemoryAccess;
+        this.allowInlineSsdAccess = orig.allowInlineSsdAccess;
+        this.useDurableDelete = orig.useDurableDelete;
+        this.simulateXdrWrite = orig.simulateXdrWrite;
+        this.commitLevel = orig.commitLevel;
+        this.readModeAP = orig.readModeAP;
+        this.readModeSC = orig.readModeSC;
+        this.resetTtlOnReadAtPercent = orig.resetTtlOnReadAtPercent;
+		this.stackTraceOnException = orig.stackTraceOnException;
+    }
+
     @Override public String toString() {
         Map<String, Object> m = new LinkedHashMap<>();
-        if (abandonCallAfter != null) m.put("abandonCallAfter", abandonCallAfter);
-        if (delayBetweenRetries != null) m.put("delayBetweenRetries", delayBetweenRetries);
-        if (maximumNumberOfCallAttempts != null) m.put("maximumNumberOfCallAttempts", maximumNumberOfCallAttempts);
-        if (replicaOrder != null) m.put("replicaOrder", replicaOrder);
-        if (sendKey != null) m.put("sendKey", sendKey);
-        if (useCompression != null) m.put("useCompression", useCompression);
-        if (waitForCallToComplete != null) m.put("waitForCallToComplete", waitForCallToComplete);
-        if (waitForConnectionToComplete != null) m.put("waitForConnectionToComplete", waitForConnectionToComplete);
-        if (waitForSocketResponseAfterCallFails != null) m.put("waitForSocketResponseAfterCallFails", waitForSocketResponseAfterCallFails);
+        if (abandonCallAfter != null) {
+			m.put("abandonCallAfter", abandonCallAfter);
+		}
+        if (delayBetweenRetries != null) {
+			m.put("delayBetweenRetries", delayBetweenRetries);
+		}
+        if (maximumNumberOfCallAttempts != null) {
+			m.put("maximumNumberOfCallAttempts", maximumNumberOfCallAttempts);
+		}
+        if (replicaOrder != null) {
+			m.put("replicaOrder", replicaOrder);
+		}
+        if (sendKey != null) {
+			m.put("sendKey", sendKey);
+		}
+        if (useCompression != null) {
+			m.put("useCompression", useCompression);
+		}
+        if (waitForCallToComplete != null) {
+			m.put("waitForCallToComplete", waitForCallToComplete);
+		}
+        if (waitForConnectionToComplete != null) {
+			m.put("waitForConnectionToComplete", waitForConnectionToComplete);
+		}
+        if (waitForSocketResponseAfterCallFails != null) {
+			m.put("waitForSocketResponseAfterCallFails", waitForSocketResponseAfterCallFails);
+		}
 
-        if (recordQueueSize != null) m.put("recordQueueSize", recordQueueSize);
+        if (recordQueueSize != null) {
+			m.put("recordQueueSize", recordQueueSize);
+		}
 
-        if (maxConcurrentNodes != null) m.put("maxConcurrentNodes", maxConcurrentNodes);
-        if (allowInlineMemoryAccess != null) m.put("allowInlineMemoryAccess", allowInlineMemoryAccess);
-        if (allowInlineSsdAccess != null) m.put("allowInlineSsdAccess", allowInlineSsdAccess);
+        if (maxConcurrentNodes != null) {
+			m.put("maxConcurrentNodes", maxConcurrentNodes);
+		}
+        if (allowInlineMemoryAccess != null) {
+			m.put("allowInlineMemoryAccess", allowInlineMemoryAccess);
+		}
+        if (allowInlineSsdAccess != null) {
+			m.put("allowInlineSsdAccess", allowInlineSsdAccess);
+		}
 
-        if (useDurableDelete != null) m.put("useDurableDelete", useDurableDelete);
-        if (simulateXdrWrite != null) m.put("simulateXdrWrite", simulateXdrWrite);
+        if (useDurableDelete != null) {
+			m.put("useDurableDelete", useDurableDelete);
+		}
+        if (simulateXdrWrite != null) {
+			m.put("simulateXdrWrite", simulateXdrWrite);
+		}
 
-        if (commitLevel != null) m.put("commitLevel", commitLevel);
+        if (commitLevel != null) {
+			m.put("commitLevel", commitLevel);
+		}
 
-        if (readModeAP != null) m.put("readModeAP", readModeAP);
-        if (readModeSC != null) m.put("readModeSC", readModeSC);
-        if (resetTtlOnReadAtPercent != null) m.put("resetTtlOnReadAtPercent", resetTtlOnReadAtPercent);
-        
-        if (stackTraceOnException != null) m.put("stackTraceOnException", stackTraceOnException);
+        if (readModeAP != null) {
+			m.put("readModeAP", readModeAP);
+		}
+        if (readModeSC != null) {
+			m.put("readModeSC", readModeSC);
+		}
+        if (resetTtlOnReadAtPercent != null) {
+			m.put("resetTtlOnReadAtPercent", resetTtlOnReadAtPercent);
+		}
+        if (stackTraceOnException != null) {
+		    m.put("stackTraceOnException", stackTraceOnException);
+		}
 
         return m.toString();
     }
@@ -141,21 +205,20 @@ public final class Settings {
     }
 
     public CommitLevel getCommitLevel() {
-        return commitLevel == null ? CommitLevel.COMMIT_ALL : commitLevel;
+        return commitLevel;
     }
 
     public ReadModeAP getReadModeAP() {
-        return readModeAP == null ? ReadModeAP.ALL : readModeAP;
+        return readModeAP;
     }
 
     public ReadModeSC getReadModeSC() {
-        return readModeSC == null ? ReadModeSC.SESSION : readModeSC;
+        return readModeSC;
     }
 
     public int getResetTtlOnReadAtPercent() {
         return resetTtlOnReadAtPercent;
     }
-    
     public boolean getStackTraceOnException() {
         return stackTraceOnException;
     }
@@ -180,6 +243,7 @@ public final class Settings {
         return writePolicy;
     }
 
+    @Deprecated(forRemoval = true)
     public BatchPolicy asBatchPolicy() {
         BatchPolicy batchPolicy = new BatchPolicy();
         batchPolicy.compress = this.useCompression;
@@ -201,6 +265,7 @@ public final class Settings {
         return batchPolicy;
     }
 
+    @Deprecated(forRemoval = true)
     public QueryPolicy asQueryPolicy() {
         QueryPolicy queryPolicy = new QueryPolicy();
         queryPolicy.compress = this.useCompression;
@@ -224,6 +289,7 @@ public final class Settings {
         queryPolicy.recordQueueSize = this.recordQueueSize;
         return queryPolicy;
     }
+    @Deprecated(forRemoval = true)
     public Policy asReadPolicy() {
         Policy readPolicy = new Policy();
         readPolicy.compress = this.useCompression;

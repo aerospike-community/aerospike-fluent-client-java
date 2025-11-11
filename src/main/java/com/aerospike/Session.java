@@ -21,10 +21,10 @@ public class Session {
     private final Behavior behavior;
     private final IAerospikeClient client;
     
-    protected Session(Cluster connection, Behavior behavior) {
-        this.cluster = connection;
+    protected Session(Cluster cluster, Behavior behavior) {
+        this.cluster = cluster;
         this.behavior = behavior;
-        this.client = connection.getUnderlyingClient();
+        this.client = cluster.getUnderlyingClient();
     }
     
     public class ExpressionBuilder {

@@ -1,5 +1,7 @@
 package com.aerospike.policy;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,6 +10,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.aerospike.client.policy.CommitLevel;
 import com.aerospike.client.policy.ReadModeAP;
@@ -115,13 +120,14 @@ public final class Behavior {
                     .delayBetweenRetries(Duration.ofMillis(0))
                     .useDurableDelete(false)
                     .maximumNumberOfCallAttempts(3)
+                    .maxConcurrentNodes(1)
                     .replicaOrder(Replica.SEQUENCE)  // Old: SEQUENCE, now explicit list
-                    .sendKey(true)
-                    .useCompression(false)
                     .readMode(ReadModeAP.ALL)
-                    .resetTtlOnReadAtPercent(0)
                     .consistency(ReadModeSC.SESSION)
+                    .resetTtlOnReadAtPercent(0)
+                    .sendKey(true)
                     .stackTraceOnException(true)
+                    .useCompression(false)
                     .waitForCallToComplete(Duration.ofSeconds(30))
                     .waitForConnectionToComplete(Duration.ofSeconds(0))
                     .waitForSocketResponseAfterCallFails(Duration.ofSeconds(0))
@@ -288,9 +294,122 @@ public final class Behavior {
     public Behavior deriveWithChanges(String name, java.util.function.Consumer<BehaviorBuilder> configurator) {
         BehaviorBuilder builder = new BehaviorBuilderImpl(name, this);
         configurator.accept(builder);
-        return builder.build();
+        Behavior newBehavior = builder.build();
+        
+        // Register the manually created behavior
+        BehaviorRegistry.getInstance().registerBehavior(newBehavior);
+        
+        return newBehavior;
     }
 
+    /**
+     * Find a behavior by name in the tree starting from this behavior
+     *
+     * @param name The name of the behavior to find
+     * @return Optional containing the behavior if found, or empty if not found
+     */
+    public Optional<Behavior> findBehavior(String name) {
+        return BehaviorRegistry.getInstance().findInTree(this, name);
+    }
+
+    /**
+     * Get a behavior by name from the registry
+     *
+     * @param name The name of the behavior to get
+     * @return The behavior, or DEFAULT if not found
+     */
+    public static Behavior getBehavior(String name) {
+        return BehaviorRegistry.getInstance().getBehaviorOrDefault(name);
+    }
+
+    /**
+     * Get all registered behaviors
+     *
+     * @return Set of all behaviors
+     */
+    public static Set<Behavior> getAllBehaviors() {
+        return BehaviorRegistry.getInstance().getAllBehaviors().entrySet().stream()
+            .map(entry -> entry.getValue())
+            .collect(Collectors.toSet());
+    }
+
+    /**
+     * Start monitoring a YAML file for behavior changes
+     *
+     * @param yamlFilePath The path to the YAML file to monitor
+     * @throws IOException if there's an error setting up the file monitoring
+     */
+    public static void startMonitoring(String yamlFilePath) throws IOException {
+        BehaviorFileMonitor.getInstance().startMonitoring(yamlFilePath);
+    }
+
+    /**
+     * Start monitoring a YAML file for behavior changes and return a Closeable for use with try-with-resources
+     *
+     * @param yamlFilePath The path to the YAML file to monitor
+     * @return Closeable instance that can be used with try-with-resources
+     * @throws IOException if there's an error setting up the file monitoring
+     */
+    public static Closeable startMonitoringWithResource(String yamlFilePath) throws IOException {
+        BehaviorFileMonitor monitor = BehaviorFileMonitor.getInstance();
+        monitor.startMonitoring(yamlFilePath);
+        return monitor;
+    }
+
+    /**
+     * Start monitoring a YAML file for behavior changes with a custom reload delay
+     *
+     * @param yamlFilePath The path to the YAML file to monitor
+     * @param reloadDelayMs The delay in milliseconds before reloading after a change
+     * @throws IOException if there's an error setting up the file monitoring
+     */
+    public static void startMonitoring(String yamlFilePath, long reloadDelayMs) throws IOException {
+        BehaviorFileMonitor.getInstance().startMonitoring(yamlFilePath, reloadDelayMs);
+    }
+
+    /**
+     * Start monitoring a YAML file for behavior changes with a custom reload delay and return a Closeable for use with try-with-resources
+     *
+     * @param yamlFilePath The path to the YAML file to monitor
+     * @param reloadDelayMs The delay in milliseconds before reloading after a change
+     * @return Closeable instance that can be used with try-with-resources
+     * @throws IOException if there's an error setting up the file monitoring
+     */
+    public static Closeable startMonitoringWithResource(String yamlFilePath, long reloadDelayMs) throws IOException {
+        BehaviorFileMonitor monitor = BehaviorFileMonitor.getInstance();
+        monitor.startMonitoring(yamlFilePath, reloadDelayMs);
+        return monitor;
+    }
+
+    /**
+     * Stop monitoring the YAML file
+     */
+    public static void stopMonitoring() {
+        BehaviorFileMonitor.getInstance().stopMonitoring();
+    }
+
+    /**
+     * Check if monitoring is active
+     *
+     * @return true if monitoring is active
+     */
+    public static boolean isMonitoring() {
+        return BehaviorFileMonitor.getInstance().isMonitoring();
+    }
+
+    /**
+     * Manually reload behaviors from the monitored YAML file
+     */
+    public static void reloadBehaviors() {
+        BehaviorFileMonitor.getInstance().reloadBehaviors();
+    }
+
+    /**
+     * Shutdown the file monitor
+     */
+    public static void shutdownMonitor() {
+        BehaviorFileMonitor.getInstance().shutdown();
+    }
 
     /** Debug helper: prints patches (in call order) and the resolved matrix. */
     public String explain() {

@@ -15,6 +15,7 @@ abstract class QueryImpl {
     public abstract RecordStream execute();
     public abstract RecordStream executeSync();
     public abstract RecordStream executeAsync();
+	public abstract boolean allowsSecondaryIndexQuery();
     
     public Session getSession() {
         return session;
@@ -27,6 +28,4 @@ abstract class QueryImpl {
     public boolean hasPartitionFilter() {
         return queryBuilder.getStartPartition() > 0 || queryBuilder.getEndPartition() < 4096;
     }
-    
-    public abstract boolean allowsSecondaryIndexQuery();
 }

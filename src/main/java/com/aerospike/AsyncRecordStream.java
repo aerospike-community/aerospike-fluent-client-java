@@ -86,11 +86,12 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
     }
 
     /** For producers: signal normal completion. Safe to call multiple times. */
-    public void complete() {
+    public AsyncRecordStream complete() {
         if (completed.compareAndSet(false, true)) {
             // Ensure consumer unblocks even if queue is full
             queue.offer(END);
         }
+        return this;
     }
 
     /** For consumers: a standard Java Stream view. Closing the stream cancels producers. */
@@ -167,9 +168,10 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
     // --- RecordStreamImpl methods ---
     
     @Override
-    public boolean hasMorePages() {
-        // Mirror SingleItemRecordStream behavior
-        // Use compareAndSet for thread-safety
+    public boolean hasMoreChunks() {
+        // For API consistency with ChunkedRecordStream.
+        // AsyncRecordStream doesn't actually have chunks - all data is streamed continuously.
+        // Returns true on first call, false afterward.
         return isFirstPage.compareAndSet(true, false);
     }
     

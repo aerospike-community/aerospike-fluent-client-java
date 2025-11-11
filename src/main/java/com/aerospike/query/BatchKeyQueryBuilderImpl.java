@@ -76,7 +76,7 @@ class BatchKeyQueryBuilderImpl extends QueryImpl {
         }
         
         long limit = getQueryBuilder().getLimit();
-        List<BatchRecord> batchRecords = new ArrayList<>();
+        List<BatchRecord> batchRecords = new ArrayList<>(keyList.size());
         List<BatchRecord> batchRecordsForServer = hasPartitionFilter() ? new ArrayList<>() : batchRecords;
         
         for (Key thisKey : keyList) {
@@ -140,23 +140,17 @@ class BatchKeyQueryBuilderImpl extends QueryImpl {
                 }
             }
             
-            // TODO: ResultsInKeyOrder?
-            return new RecordStream(results,
-                    limit,
-                    getQueryBuilder().getPageSize(),
-                    getQueryBuilder().getSortInfo(),
-                    true);
+            return new RecordStream(results, limit);
         }
         catch (AerospikeException ae) {
             if (Log.warnEnabled() && ae.getResultCode() == ResultCode.UNSUPPORTED_FEATURE) {
                 if (this.getQueryBuilder().getTxnToUse() != null) {
                     Set<String> namespaces = keyList.stream().map(key->key.namespace).collect(Collectors.toSet());
-                    namespaces.forEach(namespace -> {
-                        if (!getSession().isNamespaceSC(namespace)) {
+                    namespaces.forEach(ns -> {
+                        if (!getSession().isNamespaceSC(ns)) {
                             Log.warn(String.format("Namespace '%s' is involved in transaction, but it is not an SC namespace. "
-                                    + "This will throw an Unsupported Server Feature exception.", namespace));
+                                    + "This will throw an Unsupported Server Feature exception.", ns));
                         }
-
                     });
                 }
             }

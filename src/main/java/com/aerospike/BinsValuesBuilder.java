@@ -16,9 +16,9 @@ import com.aerospike.client.BatchRecord;
 import com.aerospike.client.BatchWrite;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
-import com.aerospike.client.Record;
 import com.aerospike.client.Log;
 import com.aerospike.client.Operation;
+import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.Value;
@@ -31,8 +31,8 @@ import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dslobjects.BooleanExpression;
 import com.aerospike.exception.AeroException;
 import com.aerospike.policy.Behavior.OpKind;
-import com.aerospike.policy.Settings;
 import com.aerospike.policy.Behavior.OpShape;
+import com.aerospike.policy.Settings;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
@@ -77,11 +77,10 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
      */
     public BinsValuesBuilder values(Object... values) {
         if (values.length != binNames.length) {
-            throw new IllegalArgumentException(String.format(
-                "When calling '.values(...)' to specify the values for multiple bins,"
+            throw new IllegalArgumentException(
+                    String.format("When calling '.values(...)' to specify the values for multiple bins,"
                 + " the number of values must match the number of bins specified in the '.bins(...)' call."
-                + " This call specified %d bins, but supplied %d values.",
-                binNames.length, values.length));
+                            + " This call specified %d bins, but supplied %d values.", binNames.length, values.length));
         }
         
         checkRoomToAddAnotherValue();
@@ -92,8 +91,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     
     private void checkValuesExist(String name) {
         if (valueSets.size() == 0) {
-            throw new IllegalArgumentException(String.format(
-                    "%s was called when no values were defined (by calling '.values'). This method"
+            throw new IllegalArgumentException(
+                    String.format("%s was called when no values were defined (by calling '.values'). This method"
                     + " sets parameters on the values for that record, so call '.values' before"
                     + " calling this method", name));
         }
@@ -171,7 +170,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     // Multi-key expiry methods (only available for multiple keys)
     public BinsValuesBuilder expireAllRecordsAfter(Duration duration) {
         if (!opBuilder.isMultiKey()) {
-            throw new IllegalStateException("expireAllRecordsAfter() is only available when multiple keys are specified");
+            throw new IllegalStateException(
+                    "expireAllRecordsAfter() is only available when multiple keys are specified");
         }
         this.expirationInSecondsForAll = duration.getSeconds();
         return this;
@@ -179,7 +179,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     
     public BinsValuesBuilder expireAllRecordsAfterSeconds(long seconds) {
         if (!opBuilder.isMultiKey()) {
-            throw new IllegalStateException("expireAllRecordsAfterSeconds() is only available when multiple keys are specified");
+            throw new IllegalStateException(
+                    "expireAllRecordsAfterSeconds() is only available when multiple keys are specified");
         }
         this.expirationInSecondsForAll = seconds;
         return this;
@@ -203,7 +204,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     
     public BinsValuesBuilder neverExpireAllRecords() {
         if (!opBuilder.isMultiKey()) {
-            throw new IllegalStateException("neverExpireAllRecords() is only available when multiple keys are specified");
+            throw new IllegalStateException(
+                    "neverExpireAllRecords() is only available when multiple keys are specified");
         }
         this.expirationInSecondsForAll = OperationBuilder.TTL_NEVER_EXPIRE;
         return this;
@@ -211,7 +213,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     
     public BinsValuesBuilder withNoChangeInExpirationForAllRecords() {
         if (!opBuilder.isMultiKey()) {
-            throw new IllegalStateException("withNoChangeInExpirationForAllRecords() is only available when multiple keys are specified");
+            throw new IllegalStateException(
+                    "withNoChangeInExpirationForAllRecords() is only available when multiple keys are specified");
         }
         this.expirationInSecondsForAll = OperationBuilder.TTL_NO_CHANGE;
         return this;
@@ -219,7 +222,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     
     public BinsValuesBuilder expiryFromServerDefaultForAllRecords() {
         if (!opBuilder.isMultiKey()) {
-            throw new IllegalStateException("expiryFromServerDefaultForAllRecords() is only available when multiple keys are specified");
+            throw new IllegalStateException(
+                    "expiryFromServerDefaultForAllRecords() is only available when multiple keys are specified");
         }
         this.expirationInSecondsForAll = OperationBuilder.TTL_SERVER_DEFAULT;
         return this;
@@ -329,8 +333,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
      */
     public RecordStream executeSync() {
         if (Log.debugEnabled()) {
-            Log.debug("BinsValuesBuilder.executeSync() called for " + keys.size() + " key(s), transaction: " + 
-                     (txnToUse != null ? "yes" : "no"));
+            Log.debug("BinsValuesBuilder.executeSync() called for " + keys.size() + " key(s), transaction: "
+                    + (txnToUse != null ? "yes" : "no"));
         }
         
         if (valueSets.size() != opBuilder.getNumKeys()) {
@@ -341,8 +345,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
         
         if (keys.size() >= OperationBuilder.getBatchOperationThreshold()) {
             return executeBatchSync();
-        }
-        else {
+        } else {
             return executeIndividualSync();
         }
     }
@@ -358,17 +361,15 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
      */
     public RecordStream executeAsync() {
         if (Log.debugEnabled()) {
-            Log.debug("BinsValuesBuilder.executeAsync() called for " + keys.size() + " key(s), transaction: " + 
-                     (txnToUse != null ? "yes" : "no"));
+            Log.debug("BinsValuesBuilder.executeAsync() called for " + keys.size() + " key(s), transaction: "
+                    + (txnToUse != null ? "yes" : "no"));
         }
         
         if (this.txnToUse != null && Log.warnEnabled()) {
-            Log.warn(
-                "executeAsync() called within a transaction. " +
-                "Async operations may still be in flight when commit() is called, " +
-                "which could lead to inconsistent state. " +
-                "Consider using executeSync() or execute() for transactional safety."
-            );
+            Log.warn("executeAsync() called within a transaction. "
+                    + "Async operations may still be in flight when commit() is called, "
+                    + "which could lead to inconsistent state. "
+                    + "Consider using executeSync() or execute() for transactional safety.");
         }
         
         if (valueSets.size() != opBuilder.getNumKeys()) {
@@ -379,8 +380,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
         
         if (keys.size() >= OperationBuilder.getBatchOperationThreshold()) {
             return executeBatchSync();
-        }
-        else {
+        } else {
             return executeIndividualAsync();
         }
     }
@@ -408,6 +408,8 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             }
             bwp.expiration = getExpiration(valueSet);
             bwp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opBuilder.opType);
+            bwp.sendKey = settings.getSendKey();
+            bwp.durableDelete = settings.getUseDurableDelete();
             batchRecords.add(new BatchWrite(bwp, key, ops));
         }
         batchPolicy.txn = this.txnToUse;
@@ -430,7 +432,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             }
         }
         
-        return new RecordStream(results, 0, 0, null, true);
+        return new RecordStream(results, 0);
     }
     
     
@@ -444,11 +446,11 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
         
         // Single key: synchronous execution
         if (keys.size() == 1) {
-            Key key = keys.get(0);
-            ValueData valueSet = valueSets.get(key);
+            Key firstKey = keys.get(0);
+            ValueData valueSet = valueSets.get(firstKey);
             Operation[] ops = getOperationsForValueData(valueSet);
             Settings settings = opBuilder.getSession().getBehavior()
-                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(key.namespace));
+                    .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(firstKey.namespace));
             WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
             wp.expiration = getExpiration(valueSet);
             wp.txn = this.txnToUse;
@@ -458,30 +460,28 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             
             boolean stackTraceOnException = settings.getStackTraceOnException();
             
-            List<RecordResult> records = new ArrayList<>();
             try {
-                Record record = opBuilder.getSession().getClient().operate(wp, key, ops);
+                Record record = opBuilder.getSession().getClient().operate(wp, firstKey, ops);
                 if (respondAllKeys || record != null) {
-                    records.add(new RecordResult(key, record, 0));
+                    return new RecordStream(firstKey, record);
                 }
             } catch (AerospikeException ae) {
                 if (shouldPublishException(ae)) {
                     if (ae.getResultCode() != ResultCode.FILTERED_OUT) {
-                        opBuilder.showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                        opBuilder.showWarningsOnException(ae, txnToUse, firstKey, wp.expiration);
                     }
-                    records.add(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, 0));
+                    return new RecordStream(new RecordResult(firstKey, AeroException.from(ae), 0));
                 }
             }
-            return new RecordStream(records.toArray(new RecordResult[0]), 0, 0, null, false);
+            return new RecordStream();
         }
         
         // Multiple keys: parallel execution with virtual threads, JOINED before return
-        List<RecordResult> allRecords = new CopyOnWriteArrayList<>();
+        AsyncRecordStream stream = new AsyncRecordStream(keys.size());
         CountDownLatch latch = new CountDownLatch(keys.size());
         
         Settings settings = opBuilder.getSession().getBehavior()
                 .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace));
-        boolean stackTraceOnException = settings.getStackTraceOnException();
         
         for (int i = 0; i < keys.size(); i++) {
             final int index = i;
@@ -500,14 +500,14 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
                     try {
                         Record record = opBuilder.getSession().getClient().operate(wp, key, ops);
                         if (respondAllKeys || record != null) {
-                            allRecords.add(new RecordResult(key, record, index));
+                            stream.publish(new RecordResult(key, record, index));
                         }
                     } catch (AerospikeException ae) {
                         if (shouldPublishException(ae)) {
                             if (ae.getResultCode() != ResultCode.FILTERED_OUT) {
                                 opBuilder.showWarningsOnException(ae, txnToUse, key, wp.expiration);
                             }
-                            allRecords.add(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, index));
+                            stream.publish(new RecordResult(key, AeroException.from(ae), index));
                         }
                     }
                 } finally {
@@ -524,7 +524,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             throw new RuntimeException("Interrupted while waiting for operations to complete", e);
         }
         
-        return new RecordStream(allRecords.toArray(new RecordResult[0]), 0, 0, null, false);
+        return new RecordStream(stream.complete());
     }
     
     /**
@@ -579,8 +579,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     private int getExpiration(ValueData valueData) {
         if (valueData.expirationInSeconds != Long.MIN_VALUE) {
             return opBuilder.getExpirationAsInt(valueData.expirationInSeconds);
-        }
-        else {
+        } else {
             return opBuilder.getExpirationAsInt(expirationInSecondsForAll);
         }
     }

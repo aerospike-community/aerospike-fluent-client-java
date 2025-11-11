@@ -13,6 +13,7 @@ import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.DataSet;
 import com.aerospike.DefaultRecordMappingFactory;
+import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
@@ -421,13 +422,15 @@ public class QueryExamples {
             customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
             System.out.println(customers); 
 
-            customers = session.query(customerDataSet).pageSize(20).execute().toObjectList(customerMapper);
+            // Server-side chunking example - fetch records in chunks of 20
+            customers = session.query(customerDataSet).chunkSize(20).execute().toObjectList(customerMapper);
             System.out.println(customers);
 
-            RecordStream rs = session.query(customerDataSet).pageSize(10).execute();
-            int page = 0;
-            while (rs.hasMorePages()) {
-                System.out.println("Page: " + (++page));
+            // Server-side chunking example - process records in chunks of 10
+            RecordStream rs = session.query(customerDataSet).chunkSize(10).execute();
+            int chunk = 0;
+            while (rs.hasMoreChunks()) {
+                System.out.println("Chunk: " + (++chunk));
                 rs.forEach(rec -> System.out.println(rec));
             }
             
@@ -436,13 +439,15 @@ public class QueryExamples {
                 .stream()
                 .mapToInt(kr -> kr.recordOrThrow().getInt("quantity"))
                 .sum();
-            System.out.println("\n\nSorting customers by Name with a where clause");
+            System.out.println("\n\nSorting customers by Name with a where clause using NavigatableRecordStream");
             customers = session.query(customerDataSet)
-                    .sortReturnedSubsetBy("name", SortDir.SORT_ASC, true)
                     .where("$.name == 'Tim' and $.age > 30")
                     .limit(1000)
                     .execute()
+                    .asNavigatableStream()
+                    .sortBy("name", SortDir.SORT_ASC, true)
                     .toObjectList(customerMapper);
+            
             for (Customer customer : customers) {
                 System.out.println(customer);
             }
@@ -450,10 +455,11 @@ public class QueryExamples {
             System.out.println("End sorting customers by Name with a where clause\n");
 
             customers = session.query(customerDataSet)
-                    .sortReturnedSubsetBy("name", SortDir.SORT_ASC, true)
                     .where(Dsl.stringBin("name").eq("Tim").and(Dsl.longBin("age").gt(30)))
                     .limit(1000)
                     .execute()
+                    .asNavigatableStream()
+                    .sortBy("name", SortDir.SORT_ASC, true)
                     .toObjectList(customerMapper);
             for (Customer customer : customers) {
                 System.out.println(customer);
@@ -462,40 +468,41 @@ public class QueryExamples {
             System.out.println("---- End sort ---");
             
 
-            System.out.println("\n\nSorting customers by Age (desc) then name (asc), paginating by 5 record");
-            try (RecordStream recStream = session.query(customerDataSet)
-                    .sortReturnedSubsetBy("age", SortDir.SORT_DESC)
-                    .sortReturnedSubsetBy("name", SortDir.SORT_ASC, true)
-                    .pageSize(5)
+            System.out.println("\n\nSorting customers by Age (desc) then name (asc), using NavigatableRecordStream for client-side pagination");
+            try (NavigatableRecordStream navStream = session.query(customerDataSet)
                     .limit(13)
-                    .execute()) {
-                page = 0;
-                while (recStream.hasMorePages()) {
+                    .execute()
+                    .asNavigatableStream()
+                    .sortBy(List.of(
+                        SortProperties.descending("age"),
+                        SortProperties.ascendingIgnoreCase("name")
+                    ))
+                    .pageSize(5)) {
+                
+                int page = 0;
+                while (navStream.hasMorePages()) {
                     System.out.println("---- Page " + (++page) + " -----");
-                    customers = recStream.toObjectList(customerMapper);
+                    customers = navStream.toObjectList(customerMapper);
                     customers.forEach(cust -> System.out.println(cust));
                 }
                 System.out.println("---- End sort ---");
                 
-                recStream.asResettablePagination().ifPresent(rp -> {
-                    System.out.println("--- Setting page to 2 ---");
-                    rp.setPageTo(2);
-                    recStream.forEach(rec -> System.out.println(rec));
-                    System.out.println("--- done with page 2 ---");
-                });
+                // Jump to page 2
+                System.out.println("--- Setting page to 2 ---");
+                navStream.setPageTo(2);
+                navStream.forEach(rec -> System.out.println(rec));
+                System.out.println("--- done with page 2 ---");
                 
-                // Now re-sort by name
-                recStream.asSortable().ifPresent(sort -> {
-                    sort.sortBy(new SortProperties("name", SortDir.SORT_ASC, false));
-                    System.out.println("Re-sorting records by name");
-                    int pageNum = 0;
-                    while (recStream.hasMorePages()) {
-                        System.out.println("---- Page " + (++pageNum) + " -----");
-                        List<Customer> custList = recStream.toObjectList(customerMapper);
-                        custList.forEach(cust -> System.out.println(cust));
-                    }
-                    System.out.println("---- End sort ---");
-                });
+                // Now re-sort by name only
+                System.out.println("Re-sorting records by name");
+                navStream.sortBy(SortProperties.ascending("name"));
+                int pageNum = 0;
+                while (navStream.hasMorePages()) {
+                    System.out.println("---- Page " + (++pageNum) + " -----");
+                    List<Customer> custList = navStream.toObjectList(customerMapper);
+                    custList.forEach(cust -> System.out.println(cust));
+                }
+                System.out.println("---- End sort ---");
             }
 
             // Insert then read back a customer with an address

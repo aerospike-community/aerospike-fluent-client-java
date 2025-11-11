@@ -1,15 +1,18 @@
 package com.aerospike.query;
 
+import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Log;
+import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.policy.Policy;
+import com.aerospike.exception.AeroException;
+import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
-import com.aerospike.policy.Behavior.Mode;
 
 class SingleKeyQueryBuilderImpl extends QueryImpl {
     private final Key key;
@@ -53,26 +56,37 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
     }
     
     private RecordStream executeInternal() {
-        boolean isNamespaceSC = getSession().isNamespaceSC(this.key.namespace);
+    	Session session = getSession();
+        boolean isNamespaceSC = session.isNamespaceSC(this.key.namespace);
+    	QueryBuilder qb = getQueryBuilder();
+        boolean failOnFilteredOut = qb.isFailOnFilteredOut();
+
         Policy policy = getSession().getBehavior().getSettings(OpKind.READ, OpShape.POINT, isNamespaceSC ? Mode.CP : Mode.AP).asReadPolicy();
-        policy.txn = this.getQueryBuilder().getTxnToUse();
-        policy.failOnFilteredOut = this.getQueryBuilder().isFailOnFilteredOut();
-        if (!getQueryBuilder().isKeyInPartitionRange(key)) {
-            if (this.getQueryBuilder().isRespondAllKeys()) {
-                return new RecordStream(key, null, true);
+        policy.txn = qb.getTxnToUse();
+        policy.failOnFilteredOut = failOnFilteredOut;
+        if (!qb.isKeyInPartitionRange(key)) {
+            if (qb.isRespondAllKeys()) {
+                return new RecordStream(key, null);
             }
             return new RecordStream();
         }
         try {
-            if (getQueryBuilder().getWithNoBins()) {
-                return new RecordStream(key, getSession().getClient().getHeader(policy, key), this.getQueryBuilder().isRespondAllKeys());
+            Record record;
+            if (qb.getWithNoBins()) {
+                record = session.getClient().getHeader(policy, key);
+                //return new RecordStream(key, getSession().getClient().getHeader(policy, key), this.getQueryBuilder().isRespondAllKeys());
             }
             else {
-                return new RecordStream(key, 
-                        getSession().getClient().get(policy, key, getQueryBuilder().getBinNames()),
-                        this.getQueryBuilder().isRespondAllKeys()
-                    );
+                record = session.getClient().get(policy, key, qb.getBinNames());
+//                return new RecordStream(key, 
+//                        getSession().getClient().get(policy, key, getQueryBuilder().getBinNames()),
+//                        this.getQueryBuilder().isRespondAllKeys()
+//                    );
             }
+            if (record != null || qb.isRespondAllKeys()) {
+	        	return new RecordStream(key, record);
+			}
+			return new RecordStream();
         }
         catch (AerospikeException ae) {
             if (Log.warnEnabled() && ae.getResultCode() == ResultCode.UNSUPPORTED_FEATURE) {
@@ -81,7 +95,10 @@ class SingleKeyQueryBuilderImpl extends QueryImpl {
                             + "This will throw an Unsupported Server Feature Exception.", key.namespace));
                 }
             }
-            throw ae;
+            if (this.getQueryBuilder().shouldIncludeResult(0)) {
+                return new RecordStream(new RecordResult(key, AeroException.from(ae), 0));
+            }
+            return new RecordStream();
         }
     }
 }

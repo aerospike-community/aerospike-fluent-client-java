@@ -6,7 +6,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -16,9 +15,9 @@ import com.aerospike.client.BatchRecord;
 import com.aerospike.client.BatchWrite;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
+import com.aerospike.client.Record;
 import com.aerospike.client.Log;
 import com.aerospike.client.Operation;
-import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.exp.Exp;
@@ -28,7 +27,6 @@ import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
-import com.aerospike.dsl.ParseResult;
 import com.aerospike.dslobjects.BooleanExpression;
 import com.aerospike.exception.AeroException;
 import com.aerospike.policy.Behavior.OpKind;
@@ -412,7 +410,7 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
     }
     
     protected int getExpirationAsInt(long expirationInSeconds) {
-        if (expirationInSeconds > (long)Integer.MAX_VALUE) {
+        if (expirationInSeconds > Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }
         else {
@@ -573,6 +571,9 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
         wp.generationPolicy = getGenerationPolicy(generation);
         wp.txn = this.txnToUse;
         wp.recordExistsAction = recordExistsActionFromOpType(opType);
+        wp.sendKey = settings.getSendKey();
+        wp.durableDelete = settings.getUseDurableDelete();
+        
         return wp;
     }
 
@@ -596,15 +597,20 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
         session.getClient().operate(batchPolicy, batchRecords);
         
         // Convert BatchRecord to RecordResult with proper filtering and stack trace handling
-        List<RecordResult> results = new ArrayList<>();
-        for (int i = 0; i < batchRecords.size(); i++) {
-            BatchRecord br = batchRecords.get(i);
-            if (shouldIncludeResult(br.resultCode)) {
-                results.add(createRecordResultFromBatchRecord(br, settings, i));
+        AsyncRecordStream recordStream = new AsyncRecordStream(batchRecords.size());
+        try {
+            for (int i = 0; i < batchRecords.size(); i++) {
+                BatchRecord br = batchRecords.get(i);
+                if (shouldIncludeResult(br.resultCode)) {
+                    recordStream.publish(createRecordResultFromBatchRecord(br, settings, i));
+                }
             }
+            
+            return new RecordStream(recordStream);
         }
-        
-        return new RecordStream(results, 0, 0, null, true);
+        finally {
+            recordStream.complete();
+        }
     }
     
     protected RecordStream executeBatchAsync(Settings settings, Operation[] operations) {
@@ -674,18 +680,14 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
         } catch (AerospikeException ae) {
             if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
                 if (failOnFilteredOut || respondAllKeys) {
-                    asyncStream.publish(toRecordResult(key, ae, index, stackTraceOnException));
+                    asyncStream.publish(new RecordResult(key, AeroException.from(ae), index));
                 }
                 // Otherwise skip this record
             } else {
                 showWarningsOnException(ae, txnToUse, key, getExpirationAsInt());
-                asyncStream.publish(toRecordResult(key, ae, index, stackTraceOnException));
+                asyncStream.publish(new RecordResult(key, AeroException.from(ae), index));
             }
         }
-    }
-
-    private RecordResult toRecordResult(Key key, AerospikeException ae, int index, boolean stackTraceOnException) {
-        return new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, index);
     }
 
     /**

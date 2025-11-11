@@ -11,7 +11,6 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import com.aerospike.client.BatchRecord;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
@@ -20,78 +19,89 @@ import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
 import com.aerospike.exception.AeroException;
-import com.aerospike.query.FixedSizeRecordStream;
 import com.aerospike.query.RecordStreamImpl;
-import com.aerospike.query.ResettablePagination;
 import com.aerospike.query.SingleItemRecordStream;
-import com.aerospike.query.SortProperties;
-import com.aerospike.query.Sortable;
 
 public class RecordStream implements Iterator<RecordResult>, Closeable {
     private final RecordStreamImpl impl;
     public RecordStream() {impl = null;}
     
-    public RecordStream(Key key, Record record, boolean respondAllKeys) {
-        impl = new SingleItemRecordStream(key, record, respondAllKeys);
-    }
-    public RecordStream(Key[] keys, Record[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
-        impl = new FixedSizeRecordStream(keys, records, limit, pageSize, sortProperties, respondAllKeys);
-    }
-//    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties) {
-//        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties, true); // Default to true for backward compatibility
-//    }
-//    
-//    public RecordStream(List<BatchRecord> records, long limit, int pageSize, List<SortProperties> sortProperties, boolean stackTraceOnException) {
-//        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties, stackTraceOnException);
-//    }
-    
-    public RecordStream(RecordResult[] records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
-        impl = new FixedSizeRecordStream(records, limit, pageSize, sortProperties, respondAllKeys);
+    public RecordStream(RecordResult rec) {
+        impl = new SingleItemRecordStream(rec);
     }
     
-    public RecordStream(List<RecordResult> records, long limit, int pageSize, List<SortProperties> sortProperties, boolean respondAllKeys) {
-        impl = new FixedSizeRecordStream(records.toArray(RecordResult[]::new), limit, pageSize, sortProperties, respondAllKeys);
+    public RecordStream(Key key, Record record) {
+        RecordResult rec = new RecordResult(key, record, 0); // Single item, index = 0
+
+        impl = new SingleItemRecordStream(rec);
+    }
+    
+    /**
+     * Creates a RecordStream from a list of RecordResult objects.
+     * This is typically used for batch query results.
+     * 
+     * @param records the list of results
+     * @param limit the maximum number of records to include (0 or negative means no limit)
+     * @param respondAllKeys if false, null records are filtered out
+     */
+    public RecordStream(List<RecordResult> records, long limit) {
+        AsyncRecordStream asyncStream = new AsyncRecordStream(Math.max(100, records.size()));
+        
+        // Filter and limit records
+        int count = 0;
+        for (RecordResult record : records) {
+            if (limit <= 0 || count < limit) {
+                asyncStream.publish(record);
+                count++;
+            }
+        }
+        asyncStream.complete();
+        impl = asyncStream;
     }
     
     public RecordStream(AsyncRecordStream asyncStream) {
         impl = asyncStream;
     }
     
+    /**
+     * Creates a RecordStream for index/scan queries with server-side chunking.
+     * 
+     * <p>This constructor is used for queries that stream results from the server in chunks.
+     * For client-side sorting and pagination, use {@link #asNavigatableStream()} on the
+     * returned stream.</p>
+     * 
+     * @param session the Aerospike session
+     * @param queryPolicy the query policy
+     * @param statement the query statement
+     * @param filter the partition filter
+     * @param limit the maximum number of records to return (0 or negative means no limit)
+     */
     public RecordStream(Session session, QueryPolicy queryPolicy, Statement statement,
-            PartitionFilter filter, long limit, List<SortProperties> sortProperties) {
+            PartitionFilter filter, long limit) {
 
-        boolean hasSortProperties = !(sortProperties == null || sortProperties.isEmpty());
-        if (hasSortProperties && limit <= 0) {
-            throw new IllegalArgumentException(
-                    "A query with unbounded results must have a limit set on it if sorting is required. This is to ensure "
-                    + "that results can be delivered in resonable time without excessive amounts of memory being used.");
-        }
         if (limit <= 0) {
             limit = Long.MAX_VALUE;
         }
-        if (!hasSortProperties) {
-            // Not a sortable record set, just use the inbuilt stream / pagination interface
-            RecordSet recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
-            impl = new PaginatedRecordStream(session, queryPolicy, statement, filter, recordSet, limit);
-        }
-        else {
-            // Sortable record sets must use the array implementation, so fetch all records
-            int count = 0;
-            List<RecordResult> recordList = new ArrayList<>();
-            while (count < limit && !filter.isDone()) {
-                try (RecordSet recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter)) {
-                    while (count < limit && recordSet.next()) {
-                        recordList.add(new RecordResult(recordSet.getKeyRecord(), -1)); // Query operation, index = -1
-                        count++;
-                    }
-                }
-            }
-            impl = new FixedSizeRecordStream(recordList.toArray(new RecordResult[0]), 0, (int)statement.getMaxRecords(), sortProperties, false);
-        }
+        
+        // Use chunked streaming for all index queries
+        RecordSet recordSet = session.getClient().queryPartitions(queryPolicy, statement, filter);
+        impl = new ChunkedRecordStream(session, queryPolicy, statement, filter, recordSet, limit);
     }
     
-    public boolean hasMorePages() {
-        return impl == null ? false : impl.hasMorePages();
+    /**
+     * Checks if there are more chunks available from the server.
+     * 
+     * <p>This method is used for server-side streaming pagination (chunks).
+     * Returns true if more data chunks are available from the server.</p>
+     * 
+     * <p><b>Note:</b> This is distinct from client-side pagination (pages) provided by
+     * {@link NavigatableRecordStream}. Use {@link #asNavigatableStream()} for
+     * client-side sorting and bi-directional pagination.</p>
+     * 
+     * @return true if more chunks are available, false otherwise
+     */
+    public boolean hasMoreChunks() {
+        return impl == null ? false : impl.hasMoreChunks();
     }
     @Override
     public boolean hasNext() {
@@ -147,8 +157,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         }
         
         // Return new RecordStream with filtered results
-        // Using limit=0, pageSize=0, sortProperties=null for simple filtering
-        return new RecordStream(failedRecords, 0L, 0, null, true);
+        return new RecordStream(failedRecords, 0L);
     }
     
     /**
@@ -169,29 +178,6 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         return result;
     }
 
-    /**
-     * If the current record stream is able to be sorted, return a sortable interface to be able
-     * to set the sort criteria. If the current record stream is not able to be sorted, {@code Optional.empty()}
-     * is returned.
-     * @return
-     */
-    public Optional<Sortable> asSortable() {
-        if (impl instanceof Sortable) {
-            return Optional.of((Sortable)impl);
-        }
-        return Optional.empty();
-    }
-    
-    public Optional<ResettablePagination> asResettablePagination() {
-        if (impl instanceof ResettablePagination) {
-            ResettablePagination rp = (ResettablePagination)impl;
-            if (rp.maxPages() > 1) {
-                return Optional.of(rp);
-            }
-        }
-        return Optional.empty();
-    }
-    
     /**
      * Converts this RecordStream into a NavigatableRecordStream for in-memory sorting and pagination.
      * 
@@ -276,7 +262,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      * @param mapper - The mapper to use to convert the record to the class
      * @return An optional containing the data or empty. If the result code is not OK, an exception will be thrown
      */
-    public <T> Optional<T> get(Key key, RecordMapper<T> mapper) throws AeroException {
+    public <T> Optional<T> get(Key key, RecordMapper<T> mapper) {
         while (hasNext()) {
             RecordResult thisRecord = next();
             if (thisRecord.key().equals(key)) {
@@ -291,7 +277,7 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      * Get the first element from the stream. If this element failed for any reason, an exception is thrown.
      * @return the first element in the stream
      */
-    public Optional<RecordResult> getFirst() throws AeroException {
+    public Optional<RecordResult> getFirst() {
         return this.getFirst(true);
     }
     

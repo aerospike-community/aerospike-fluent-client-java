@@ -1,9 +1,10 @@
 package com.aerospike.query;
 
-import java.util.ArrayList;
 import java.util.List;
 
+import com.aerospike.AbstractFilterableBuilder;
 import com.aerospike.DataSet;
+import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordMapper;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
@@ -33,13 +34,14 @@ import com.aerospike.dslobjects.BooleanExpression;
  * 
  * <p>Example usage:</p>
  * <pre>{@code
- * // Query entire dataset with filtering
+ * // Query entire dataset with filtering and client-side sorting/pagination
  * RecordStream results = session.query(customerDataSet)
  *     .where("$.name == 'Tim' and $.age > 30")
- *     .sortReturnedSubsetBy("age", SortDir.SORT_DESC)
  *     .limit(100)
+ *     .execute()
+ *     .asNavigatableStream()
  *     .pageSize(20)
- *     .execute();
+ *     .sortBy(SortProperties.descending("age"));
  * 
  * // Query specific keys
  * RecordStream results = session.query(customerDataSet.ids(1, 2, 3))
@@ -60,15 +62,14 @@ import com.aerospike.dslobjects.BooleanExpression;
  * @see SortDir
  * @see SortProperties
  */
-public class QueryBuilder extends com.aerospike.AbstractFilterableBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder> {
+public class QueryBuilder extends AbstractFilterableBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder> {
     private final QueryImpl implementation;
     private String[] binNames = null;
     private boolean withNoBins = false;
     private long limit = 0;
-    private int pageSize = 0;
+    private int chunkSize = 0;
     private int startPartition = 0;
     private int endPartition = 4096;
-    private List<SortProperties> sortInfo = null;
     private Txn txnToUse;
     
     
@@ -195,20 +196,28 @@ public class QueryBuilder extends com.aerospike.AbstractFilterableBuilder implem
     }
     
     /**
-     * Sets the page size for paginated results.
+     * Sets the chunk size for server-side streaming.
      * 
-     * <p>This method controls how many records are returned per page when using
-     * pagination. The page size affects memory usage and network round trips.</p>
+     * <p>This method controls how many records are fetched per chunk from the server
+     * when using server-side streaming. The chunk size affects memory usage and network
+     * round trips. This is distinct from client-side pagination provided by
+     * {@link NavigatableRecordStream}.</p>
      * 
-     * @param pageSize the number of records per page (must be > 0)
+     * <p><b>Use cases:</b></p>
+     * <ul>
+     *   <li>Smaller chunks (e.g., 100-1000): Lower memory, more network calls</li>
+     *   <li>Larger chunks (e.g., 5000-10000): Higher throughput, more memory</li>
+     * </ul>
+     * 
+     * @param chunkSize the number of records per chunk (must be > 0)
      * @return this QueryBuilder for method chaining
-     * @throws IllegalArgumentException if pageSize is <= 0
+     * @throws IllegalArgumentException if chunkSize is <= 0
      */
-    public QueryBuilder pageSize(int pageSize) {
-        if (pageSize <= 0) {
-            throw new IllegalArgumentException("Page size must be > 0, not " + pageSize);
+    public QueryBuilder chunkSize(int chunkSize) {
+        if (chunkSize <= 0) {
+            throw new IllegalArgumentException("Chunk size must be > 0, not " + chunkSize);
         }
-        this.pageSize = pageSize;
+        this.chunkSize = chunkSize;
         return this;
     }
     
@@ -280,66 +289,6 @@ public class QueryBuilder extends com.aerospike.AbstractFilterableBuilder implem
         return this;
     }
     
-    /**
-     * Adds a sort field in ascending order with case sensitivity.
-     * 
-     * <p>This method adds a field to the sort criteria. Multiple sort fields can
-     * be added, and they will be applied in the order they are added.</p>
-     * 
-     * @param field the field name to sort by
-     * @return this QueryBuilder for method chaining
-     */
-    public QueryBuilder sortReturnedSubsetBy(String field) {
-        return sortReturnedSubsetBy(field, SortDir.SORT_ASC, true);
-    }
-    
-    /**
-     * Adds a sort field in ascending order with specified case sensitivity.
-     * 
-     * @param field the field name to sort by
-     * @param caseInsensitive true for case-insensitive sorting, false for case-sensitive
-     * @return this QueryBuilder for method chaining
-     */
-    public QueryBuilder sortReturnedSubsetBy(String field, boolean caseInsensitive) {
-        return sortReturnedSubsetBy(field, SortDir.SORT_ASC, caseInsensitive);
-    }
-    
-    /**
-     * Adds a sort field with specified direction and case sensitivity.
-     * 
-     * @param field the field name to sort by
-     * @param sortDir the sort direction (ascending or descending)
-     * @return this QueryBuilder for method chaining
-     */
-    public QueryBuilder sortReturnedSubsetBy(String field, SortDir sortDir) {
-        return sortReturnedSubsetBy(field, sortDir, true);
-    }
-
-    /**
-     * Adds a sort field with specified direction and case sensitivity.
-     * 
-     * <p>This method allows you to specify the complete sort criteria for a field.
-     * Multiple sort fields can be added, and they will be applied in the order
-     * they are added.</p>
-     * 
-     * <p>Note: Sorting requires that a limit be set on the query to prevent
-     * excessive memory usage.</p>
-     * 
-     * @param field the field name to sort by
-     * @param sortDir the sort direction (ascending or descending)
-     * @param caseSensitive true for case-sensitive sorting, false for case-insensitive
-     * @return this QueryBuilder for method chaining
-     */
-    public QueryBuilder sortReturnedSubsetBy(String field, SortDir sortDir, boolean caseSensitive) {
-        if (sortDir == null) {
-            sortDir = SortDir.SORT_ASC;
-        }
-        if (this.sortInfo == null) {
-            this.sortInfo = new ArrayList<>();
-        }
-        this.sortInfo.add(new SortProperties(field, sortDir, caseSensitive));
-        return this;
-    }
     
     /**
      * If the query has a `where` clause and is provided either a single key or a list of keys,
@@ -478,21 +427,12 @@ public class QueryBuilder extends com.aerospike.AbstractFilterableBuilder implem
     }
     
     /**
-     * Gets the sort information.
+     * Gets the chunk size for server-side streaming.
      * 
-     * @return the list of sort properties, or null if not specified
+     * @return the chunk size, or 0 if not set
      */
-    public List<SortProperties> getSortInfo() {
-        return sortInfo;
-    }
-    
-    /**
-     * Gets the page size.
-     * 
-     * @return the page size, or 0 if not set
-     */
-    public int getPageSize() {
-        return pageSize;
+    public int getChunkSize() {
+        return chunkSize;
     }
     
     /**
@@ -566,8 +506,8 @@ public class QueryBuilder extends com.aerospike.AbstractFilterableBuilder implem
      * <p>The RecordStream provides methods for:</p>
      * <ul>
      *   <li>Iterating through results: {@link RecordStream#hasNext()}, {@link RecordStream#next()}</li>
-     *   <li>Pagination: {@link RecordStream#hasMorePages()}</li>
-     *   <li>Sorting: {@link RecordStream#asSortable()}</li>
+     *   <li>Server-side chunking: {@link RecordStream#hasMoreChunks()}</li>
+     *   <li>Client-side sorting/pagination: {@link RecordStream#asNavigatableStream()}</li>
      *   <li>Object conversion: {@link RecordStream#toObjectList(RecordMapper)}</li>
      * </ul>
      * 
