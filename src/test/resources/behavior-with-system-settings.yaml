@@ -1,0 +1,72 @@
+behaviors:
+  - name: production
+    parent: DEFAULT
+    
+    # Global settings for all operations
+    allOperations:
+      abandonCallAfter: 5s
+      maximumNumberOfCallAttempts: 3
+    
+    # System - Transaction Verification settings
+    systemTxnVerify:
+      consistency: LINEARIZE
+      replicaOrder: MASTER
+      maximumNumberOfCallAttempts: 10
+      waitForCallToComplete: 5s
+      abandonCallAfter: 15s
+      delayBetweenRetries: 2s
+    
+    # System - Transaction Rollback settings
+    systemTxnRoll:
+      replicaOrder: MASTER
+      maximumNumberOfCallAttempts: 8
+      waitForCallToComplete: 4s
+      abandonCallAfter: 12s
+      delayBetweenRetries: 1s
+    
+    # System - Connection Pool settings
+    systemConnections:
+      minimumConnectionsPerNode: 10
+      maximumConnectionsPerNode: 200
+      maximumSocketIdleTime: 120s
+    
+    # System - Circuit Breaker settings
+    systemCircuitBreaker:
+      numTendIntervalsInErrorWindow: 2
+      maximumErrorsInErrorWindow: 50
+    
+    # System - Cluster Refresh settings
+    systemRefresh:
+      tendInterval: 2s
+    
+    # Batch operations
+    batchReads:
+      maxConcurrentServers: 8
+      allowInlineMemoryAccess: true
+    
+    # Writes
+    retryableWrites:
+      maximumNumberOfCallAttempts: 5
+      useDurableDelete: false
+
+  - name: highLoad
+    parent: production
+    
+    # Override connection pool for high load scenarios
+    systemConnections:
+      minimumConnectionsPerNode: 20
+      maximumConnectionsPerNode: 500
+    
+    # More aggressive circuit breaker
+    systemCircuitBreaker:
+      numTendIntervalsInErrorWindow: 3
+      maximumErrorsInErrorWindow: 100
+    
+    # More frequent cluster refresh
+    systemRefresh:
+      tendInterval: 500ms
+    
+    # Higher concurrency for batch operations
+    batchReads:
+      maxConcurrentServers: 16
+

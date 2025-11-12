@@ -320,9 +320,9 @@ class BehaviorTest {
             assertFalse(readBatchAp.allowInlineMemoryAccess);
             assertTrue(readBatchAp.allowInlineSsdAccess);
             
-            // Should not affect point reads
+            // Should not affect point reads - they keep global default
             Settings readPointAp = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.AP);
-            assertNull(readPointAp.maxConcurrentNodes);
+            assertEquals(1, readPointAp.maxConcurrentNodes); // Global default from Selectors.all()
         }
         
         @Test
@@ -619,7 +619,7 @@ class BehaviorTest {
             assertEquals(10, readBatch.maxConcurrentNodes);
             
             Settings readPoint = behavior.getSettings(OpKind.READ, OpShape.POINT, Mode.AP);
-            assertNull(readPoint.maxConcurrentNodes);
+            assertEquals(1, readPoint.maxConcurrentNodes); // Global default from Selectors.all()
         }
         
         @Test
