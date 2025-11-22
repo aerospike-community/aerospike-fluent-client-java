@@ -94,32 +94,33 @@ import com.aerospike.client.policy.Replica;
  *
  * <h2>Operation Types</h2>
  * <ul>
- *   <li><b>OpKind:</b> READ, WRITE_RETRYABLE, WRITE_NON_RETRYABLE, SYSTEM_TXN_VERIFY, SYSTEM_TXN_ROLL, 
- *       SYSTEM_CONNECTIONS, SYSTEM_CIRCUIT_BREAKER, SYSTEM_REFRESH</li>
+ *   <li><b>OpKind:</b> READ, WRITE_RETRYABLE, WRITE_NON_RETRYABLE, SYSTEM_TXN_VERIFY, SYSTEM_TXN_ROLL</li>
  *   <li><b>OpShape:</b> POINT (single record), BATCH (multiple records), QUERY (scan with filter), 
  *       SYSTEM (system-level operations)</li>
  *   <li><b>Mode:</b> AP (availability priority), CP (consistency priority)</li>
  * </ul>
  *
- * <h2>System-Level Configuration</h2>
- * Beyond read/write operations, the {@code system()} selector provides access to system-level settings:
+ * <h2>Transaction Configuration</h2>
+ * The {@code transaction()} selector provides access to transaction-specific operations:
  * <ul>
  *   <li><b>txnVerify:</b> Transaction verification retry and consistency settings (read-like)</li>
  *   <li><b>txnRoll:</b> Transaction rollback retry settings (write-like)</li>
- *   <li><b>connections:</b> Connection pool configuration per node</li>
- *   <li><b>circuitBreaker:</b> Error thresholds and circuit breaking behavior</li>
- *   <li><b>refresh:</b> Cluster state refresh interval (tend frequency)</li>
  * </ul>
- * <h3>System Configuration Example:</h3>
+ * 
+ * <p><b>Note:</b> System-level settings (connections, circuit breaker, refresh intervals) are no longer
+ * configured via Behaviors. Use {@link com.aerospike.SystemSettings} and
+ * {@link com.aerospike.ClusterDefinition#withSystemSettings(com.aerospike.SystemSettings)} instead.</p>
+ * 
+ * <h3>Transaction Configuration Example:</h3>
  * <pre>{@code
- * Behavior customSystem = Behavior.DEFAULT.deriveWithChanges("customSystem", builder -> builder
- *     .on(Selectors.system().txnVerify(), ops -> ops
+ * Behavior customTxn = Behavior.DEFAULT.deriveWithChanges("customTxn", builder -> builder
+ *     .on(Selectors.transaction().txnVerify(), ops -> ops
  *         .consistency(ReadModeSC.LINEARIZE)
  *         .maximumNumberOfCallAttempts(10)
  *     )
- *     .on(Selectors.system().connections(), ops -> ops
- *         .maximumConnectionsPerNode(200)
- *         .maximumSocketIdleTime(Duration.ofSeconds(120))
+ *     .on(Selectors.transaction().txnRoll(), ops -> ops
+ *         .allowInlineMemoryAccess(false)
+ *         .maxConcurrentNodes(8)
  *     )
  * );
  * }</pre>
@@ -195,41 +196,42 @@ public final class Behavior {
                     .allowInlineMemoryAccess(true)
                     .allowInlineSsdAccess(false)
             )
+            // Query write defaults (background operations)
+            // Background operations run server-side on entire sets and require different timeout/retry settings
+            .on(Selectors.writes().retryable().query(), ops -> ops
+                    .maximumNumberOfCallAttempts(1)  // Background tasks don't retry - managed by server
+                    .waitForCallToComplete(Duration.ofSeconds(0))  // Don't wait - return immediately with ExecuteTask
+                    .abandonCallAfter(Duration.ofSeconds(30))  // Generous timeout for large scan operations
+            )
+            .on(Selectors.writes().nonRetryable().query(), ops -> ops
+                    .maximumNumberOfCallAttempts(1)  // Background tasks don't retry - managed by server
+                    .waitForCallToComplete(Duration.ofSeconds(0))  // Don't wait - return immediately with ExecuteTask
+                    .abandonCallAfter(Duration.ofSeconds(30))  // Generous timeout for large scan operations
+            )
             // AP write defaults
             .on(Selectors.writes().ap(), ops -> ops
                     .commitLevel(CommitLevel.COMMIT_ALL)
             )
-            // System - txnVerify defaults
-            .on(Selectors.system().txnVerify(), ops -> ops
+            // Transaction - txnVerify defaults
+            .on(Selectors.transaction().txnVerify(), ops -> ops
                     .consistency(ReadModeSC.LINEARIZE)
                     .replicaOrder(Replica.MASTER)
                     .maximumNumberOfCallAttempts(6)
                     .waitForCallToComplete(Duration.ofSeconds(3))
                     .abandonCallAfter(Duration.ofSeconds(10))
                     .delayBetweenRetries(Duration.ofSeconds(1))
+                    .allowInlineMemoryAccess(false)
+                    .allowInlineSsdAccess(true)
             )
-            // System - txnRoll defaults
-            .on(Selectors.system().txnRoll(), ops -> ops
+            // Transaction - txnRoll defaults
+            .on(Selectors.transaction().txnRoll(), ops -> ops
                     .replicaOrder(Replica.MASTER)
                     .maximumNumberOfCallAttempts(6)
                     .waitForCallToComplete(Duration.ofSeconds(3))
                     .abandonCallAfter(Duration.ofSeconds(10))
                     .delayBetweenRetries(Duration.ofSeconds(1))
-            )
-            // System - connections defaults
-            .on(Selectors.system().connections(), ops -> ops
-                    .minimumConnectionsPerNode(0)
-                    .maximumConnectionsPerNode(100)
-                    .maximumSocketIdleTime(Duration.ofSeconds(55))
-            )
-            // System - circuitBreaker defaults
-            .on(Selectors.system().circuitBreaker(), ops -> ops
-                    .numTendIntervalsInErrorWindow(1)
-                    .maximumErrorsInErrorWindow(100)
-            )
-            // System - refresh defaults
-            .on(Selectors.system().refresh(), ops -> ops
-                    .tendInterval(Duration.ofSeconds(1))
+                    .allowInlineMemoryAccess(false)
+                    .allowInlineSsdAccess(true)
             )
             .build();
 
@@ -326,11 +328,27 @@ public final class Behavior {
     }
 
     /**
+     * Get the resolved settings for a specific system operation.
+     * The settings are fully resolved, including inheritance from parent behaviors.
+     * @throws IllegalArgumentException if a non-system setting is specified
+     */
+    public Settings getSystemSettings(OpKind kind) {
+        if (kind.isSystem()) {
+            return resolved.get(new OpKey(kind, OpShape.SYSTEM, Mode.ANY));
+        }
+        else {
+            throw new IllegalArgumentException("Only SYSYTEM_* OpKinds are supported");
+        }
+    }
+    /**
      * Get the resolved settings for a specific operation.
      * Returns null if no settings have been configured for this operation.
      * The settings are fully resolved, including inheritance from parent behaviors.
      */
     public Settings getSettings(OpKind kind, OpShape shape, Mode mode) {
+        if (kind.isSystem()) {
+            return getSystemSettings(kind);
+        }
         return resolved.get(new OpKey(kind, shape, mode));
     }
 
@@ -340,6 +358,9 @@ public final class Behavior {
      * The settings are fully resolved, including inheritance from parent behaviors.
      */
     public Settings getSettings(OpKind kind, OpShape shape, boolean isNamespaceSC) {
+        if (kind.isSystem()) {
+            return getSystemSettings(kind);
+        }
         return resolved.get(new OpKey(kind, shape, isNamespaceSC ? Mode.CP : Mode.AP));
     }
 
@@ -658,15 +679,22 @@ public final class Behavior {
     // Dimensions
     // -----------------------------------------------------------------------------------
     public enum OpKind { 
-        READ, 
-        WRITE_RETRYABLE, 
-        WRITE_NON_RETRYABLE,
-        SYSTEM_TXN_VERIFY,
-        SYSTEM_TXN_ROLL,
-        SYSTEM_CONNECTIONS,
-        SYSTEM_CIRCUIT_BREAKER,
-        SYSTEM_REFRESH
+        READ(false), 
+        WRITE_RETRYABLE(false), 
+        WRITE_NON_RETRYABLE(false),
+        SYSTEM_TXN_VERIFY(true),
+        SYSTEM_TXN_ROLL(true);
+        
+        private boolean system;
+        private OpKind(boolean isSystem) {
+            this.system = isSystem;
+        }
+        
+        public boolean isSystem() {
+            return system;
+        }
     }
+    
     public enum OpShape { ANY, POINT, BATCH, QUERY, SYSTEM }
     public enum Mode { ANY, AP, CP }
 
@@ -742,18 +770,17 @@ public final class Behavior {
         for (Mode m : Mode.values()) {
             out.add(new OpKey(OpKind.WRITE_RETRYABLE, OpShape.POINT, m));
             out.add(new OpKey(OpKind.WRITE_RETRYABLE, OpShape.BATCH, m));
+            out.add(new OpKey(OpKind.WRITE_RETRYABLE, OpShape.QUERY, m));
         }
         // NON-RETRYABLE WRITES
         for (Mode m : Mode.values()) {
             out.add(new OpKey(OpKind.WRITE_NON_RETRYABLE, OpShape.POINT, m));
             out.add(new OpKey(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, m));
+            out.add(new OpKey(OpKind.WRITE_NON_RETRYABLE, OpShape.QUERY, m));
         }
         // SYSTEM operations (only ANY mode is meaningful for system operations)
         out.add(new OpKey(OpKind.SYSTEM_TXN_VERIFY, OpShape.SYSTEM, Mode.ANY));
         out.add(new OpKey(OpKind.SYSTEM_TXN_ROLL, OpShape.SYSTEM, Mode.ANY));
-        out.add(new OpKey(OpKind.SYSTEM_CONNECTIONS, OpShape.SYSTEM, Mode.ANY));
-        out.add(new OpKey(OpKind.SYSTEM_CIRCUIT_BREAKER, OpShape.SYSTEM, Mode.ANY));
-        out.add(new OpKey(OpKind.SYSTEM_REFRESH, OpShape.SYSTEM, Mode.ANY));
         return out;
     }
 
@@ -789,14 +816,6 @@ public final class Behavior {
         if (src.readModeAP != null) dst.readModeAP = src.readModeAP;
         if (src.readModeSC != null) dst.readModeSC = src.readModeSC;
         if (src.resetTtlOnReadAtPercent != null) dst.resetTtlOnReadAtPercent = src.resetTtlOnReadAtPercent;
-        
-        // System settings
-        if (src.minimumConnectionsPerNode != null) dst.minimumConnectionsPerNode = src.minimumConnectionsPerNode;
-        if (src.maximumConnectionsPerNode != null) dst.maximumConnectionsPerNode = src.maximumConnectionsPerNode;
-        if (src.maximumSocketIdleTime != null) dst.maximumSocketIdleTime = src.maximumSocketIdleTime;
-        if (src.numTendIntervalsInErrorWindow != null) dst.numTendIntervalsInErrorWindow = src.numTendIntervalsInErrorWindow;
-        if (src.maximumErrorsInErrorWindow != null) dst.maximumErrorsInErrorWindow = src.maximumErrorsInErrorWindow;
-        if (src.tendInterval != null) dst.tendInterval = src.tendInterval;
     }
 
     // -----------------------------------------------------------------------------------
@@ -1427,12 +1446,104 @@ public final class Behavior {
         @Override NonRetryableWriteBatchCpTweaks simulateXdrWrite(boolean b);
     }
 
+    // Query write tweaks (for background operations)
+    public interface RetryableWriteQueryAnyModeTweaks extends QueryTweaks, RetryableWriteTweaks {
+        @Override RetryableWriteQueryAnyModeTweaks abandonCallAfter(Duration d);
+        @Override RetryableWriteQueryAnyModeTweaks delayBetweenRetries(Duration d);
+        @Override RetryableWriteQueryAnyModeTweaks maximumNumberOfCallAttempts(int n);
+        @Override RetryableWriteQueryAnyModeTweaks replicaOrder(Replica r);
+        @Override RetryableWriteQueryAnyModeTweaks sendKey(boolean sendKey);
+        @Override RetryableWriteQueryAnyModeTweaks useCompression(boolean compress);
+        @Override RetryableWriteQueryAnyModeTweaks waitForCallToComplete(Duration d);
+        @Override RetryableWriteQueryAnyModeTweaks waitForConnectionToComplete(Duration d);
+        @Override RetryableWriteQueryAnyModeTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override RetryableWriteQueryAnyModeTweaks stackTraceOnException(boolean enabled);
+        @Override RetryableWriteQueryAnyModeTweaks useDurableDelete(boolean b);
+        @Override RetryableWriteQueryAnyModeTweaks simulateXdrWrite(boolean b);
+    }
+    public interface RetryableWriteQueryApTweaks extends QueryTweaks, WriteApTweaks {
+        @Override RetryableWriteQueryApTweaks abandonCallAfter(Duration d);
+        @Override RetryableWriteQueryApTweaks delayBetweenRetries(Duration d);
+        @Override RetryableWriteQueryApTweaks maximumNumberOfCallAttempts(int n);
+        @Override RetryableWriteQueryApTweaks replicaOrder(Replica r);
+        @Override RetryableWriteQueryApTweaks sendKey(boolean sendKey);
+        @Override RetryableWriteQueryApTweaks useCompression(boolean compress);
+        @Override RetryableWriteQueryApTweaks waitForCallToComplete(Duration d);
+        @Override RetryableWriteQueryApTweaks waitForConnectionToComplete(Duration d);
+        @Override RetryableWriteQueryApTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override RetryableWriteQueryApTweaks stackTraceOnException(boolean enabled);
+        @Override RetryableWriteQueryApTweaks useDurableDelete(boolean b);
+        @Override RetryableWriteQueryApTweaks simulateXdrWrite(boolean b);
+        @Override RetryableWriteQueryApTweaks commitLevel(CommitLevel level);
+    }
+    public interface RetryableWriteQueryCpTweaks extends QueryTweaks, RetryableWriteTweaks {
+        @Override RetryableWriteQueryCpTweaks abandonCallAfter(Duration d);
+        @Override RetryableWriteQueryCpTweaks delayBetweenRetries(Duration d);
+        @Override RetryableWriteQueryCpTweaks maximumNumberOfCallAttempts(int n);
+        @Override RetryableWriteQueryCpTweaks replicaOrder(Replica r);
+        @Override RetryableWriteQueryCpTweaks sendKey(boolean sendKey);
+        @Override RetryableWriteQueryCpTweaks useCompression(boolean compress);
+        @Override RetryableWriteQueryCpTweaks waitForCallToComplete(Duration d);
+        @Override RetryableWriteQueryCpTweaks waitForConnectionToComplete(Duration d);
+        @Override RetryableWriteQueryCpTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override RetryableWriteQueryCpTweaks stackTraceOnException(boolean enabled);
+        @Override RetryableWriteQueryCpTweaks useDurableDelete(boolean b);
+        @Override RetryableWriteQueryCpTweaks simulateXdrWrite(boolean b);
+    }
+    public interface NonRetryableWriteQueryAnyModeTweaks extends QueryTweaks, NonRetryableWriteTweaks {
+        @Override NonRetryableWriteQueryAnyModeTweaks abandonCallAfter(Duration d);
+        @Override NonRetryableWriteQueryAnyModeTweaks delayBetweenRetries(Duration d);
+        @Override NonRetryableWriteQueryAnyModeTweaks maximumNumberOfCallAttempts(int n);
+        @Override NonRetryableWriteQueryAnyModeTweaks replicaOrder(Replica r);
+        @Override NonRetryableWriteQueryAnyModeTweaks sendKey(boolean sendKey);
+        @Override NonRetryableWriteQueryAnyModeTweaks useCompression(boolean compress);
+        @Override NonRetryableWriteQueryAnyModeTweaks waitForCallToComplete(Duration d);
+        @Override NonRetryableWriteQueryAnyModeTweaks waitForConnectionToComplete(Duration d);
+        @Override NonRetryableWriteQueryAnyModeTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override NonRetryableWriteQueryAnyModeTweaks stackTraceOnException(boolean enabled);
+        @Override NonRetryableWriteQueryAnyModeTweaks useDurableDelete(boolean b);
+        @Override NonRetryableWriteQueryAnyModeTweaks simulateXdrWrite(boolean b);
+    }
+    public interface NonRetryableWriteQueryApTweaks extends QueryTweaks, WriteApTweaks {
+        @Override NonRetryableWriteQueryApTweaks abandonCallAfter(Duration d);
+        @Override NonRetryableWriteQueryApTweaks delayBetweenRetries(Duration d);
+        @Override NonRetryableWriteQueryApTweaks maximumNumberOfCallAttempts(int n);
+        @Override NonRetryableWriteQueryApTweaks replicaOrder(Replica r);
+        @Override NonRetryableWriteQueryApTweaks sendKey(boolean sendKey);
+        @Override NonRetryableWriteQueryApTweaks useCompression(boolean compress);
+        @Override NonRetryableWriteQueryApTweaks waitForCallToComplete(Duration d);
+        @Override NonRetryableWriteQueryApTweaks waitForConnectionToComplete(Duration d);
+        @Override NonRetryableWriteQueryApTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override NonRetryableWriteQueryApTweaks stackTraceOnException(boolean enabled);
+        @Override NonRetryableWriteQueryApTweaks useDurableDelete(boolean b);
+        @Override NonRetryableWriteQueryApTweaks simulateXdrWrite(boolean b);
+        @Override NonRetryableWriteQueryApTweaks commitLevel(CommitLevel level);
+    }
+    public interface NonRetryableWriteQueryCpTweaks extends QueryTweaks, NonRetryableWriteTweaks {
+        @Override NonRetryableWriteQueryCpTweaks abandonCallAfter(Duration d);
+        @Override NonRetryableWriteQueryCpTweaks delayBetweenRetries(Duration d);
+        @Override NonRetryableWriteQueryCpTweaks maximumNumberOfCallAttempts(int n);
+        @Override NonRetryableWriteQueryCpTweaks replicaOrder(Replica r);
+        @Override NonRetryableWriteQueryCpTweaks sendKey(boolean sendKey);
+        @Override NonRetryableWriteQueryCpTweaks useCompression(boolean compress);
+        @Override NonRetryableWriteQueryCpTweaks waitForCallToComplete(Duration d);
+        @Override NonRetryableWriteQueryCpTweaks waitForConnectionToComplete(Duration d);
+        @Override NonRetryableWriteQueryCpTweaks waitForSocketResponseAfterCallFails(Duration d);
+        @Override NonRetryableWriteQueryCpTweaks stackTraceOnException(boolean enabled);
+        @Override NonRetryableWriteQueryCpTweaks useDurableDelete(boolean b);
+        @Override NonRetryableWriteQueryCpTweaks simulateXdrWrite(boolean b);
+    }
+
     // SYSTEM tweaks interfaces
     /**
      * Tweaks for transaction verification operations (read-like settings).
      * Provides configuration for transactional verification calls.
+     * 
+     * <p><b>Note:</b> Transaction verification is internally implemented as a batch operation,
+     * so batch-specific settings (maxConcurrentNodes, allowInlineMemoryAccess, allowInlineSsdAccess)
+     * are available and apply to these operations.</p>
      */
-    public interface SystemTxnVerifyTweaks extends CommonTweaks {
+    public interface SystemTxnVerifyTweaks extends BatchTweaks {
         SystemTxnVerifyTweaks consistency(ReadModeSC consistency);
         SystemTxnVerifyTweaks replicaOrder(Replica replicaOrder);
         @Override SystemTxnVerifyTweaks maximumNumberOfCallAttempts(int attempts);
@@ -1443,13 +1554,20 @@ public final class Behavior {
         @Override SystemTxnVerifyTweaks waitForSocketResponseAfterCallFails(Duration d);
         @Override SystemTxnVerifyTweaks useCompression(boolean compress);
         @Override SystemTxnVerifyTweaks stackTraceOnException(boolean enabled);
+        @Override SystemTxnVerifyTweaks maxConcurrentNodes(int n);
+        @Override SystemTxnVerifyTweaks allowInlineMemoryAccess(boolean v);
+        @Override SystemTxnVerifyTweaks allowInlineSsdAccess(boolean v);
     }
     
     /**
      * Tweaks for transaction rollback operations (write-like settings).
      * Provides configuration for transactional rollback calls.
+     * 
+     * <p><b>Note:</b> Transaction rollback is internally implemented as a batch operation,
+     * so batch-specific settings (maxConcurrentNodes, allowInlineMemoryAccess, allowInlineSsdAccess)
+     * are available and apply to these operations.</p>
      */
-    public interface SystemTxnRollTweaks extends CommonTweaks {
+    public interface SystemTxnRollTweaks extends BatchTweaks {
         SystemTxnRollTweaks replicaOrder(Replica replicaOrder);
         @Override SystemTxnRollTweaks maximumNumberOfCallAttempts(int attempts);
         @Override SystemTxnRollTweaks waitForCallToComplete(Duration duration);
@@ -1459,34 +1577,11 @@ public final class Behavior {
         @Override SystemTxnRollTweaks waitForSocketResponseAfterCallFails(Duration d);
         @Override SystemTxnRollTweaks useCompression(boolean compress);
         @Override SystemTxnRollTweaks stackTraceOnException(boolean enabled);
+        @Override SystemTxnRollTweaks maxConcurrentNodes(int n);
+        @Override SystemTxnRollTweaks allowInlineMemoryAccess(boolean v);
+        @Override SystemTxnRollTweaks allowInlineSsdAccess(boolean v);
     }
     
-    /**
-     * Tweaks for connection pool configuration.
-     * Controls connection pooling behavior per node.
-     */
-    public interface SystemConnectionsTweaks extends TweaksView {
-        SystemConnectionsTweaks minimumConnectionsPerNode(int min);
-        SystemConnectionsTweaks maximumConnectionsPerNode(int max);
-        SystemConnectionsTweaks maximumSocketIdleTime(Duration duration);
-    }
-    
-    /**
-     * Tweaks for circuit breaker configuration.
-     * Controls error thresholds and circuit breaking behavior.
-     */
-    public interface SystemCircuitBreakerTweaks extends TweaksView {
-        SystemCircuitBreakerTweaks numTendIntervalsInErrorWindow(int intervals);
-        SystemCircuitBreakerTweaks maximumErrorsInErrorWindow(int errors);
-    }
-    
-    /**
-     * Tweaks for cluster refresh configuration.
-     * Controls how frequently cluster state is refreshed.
-     */
-    public interface SystemRefreshTweaks extends TweaksView {
-        SystemRefreshTweaks tendInterval(Duration interval);
-    }
 
     // -----------------------------------------------------------------------------------
     // Selectors + factories
@@ -1656,36 +1751,38 @@ public final class Behavior {
         public static WriteRootSelector<WriteRootAnyModeTweaks> writes() { return new WriteRootSel(new SelectionSpec(null, OpShape.ANY, Mode.ANY, true)); }
         
         /**
-         * Selects system-level operations for transaction verification, connection management,
-         * circuit breaking, and cluster refresh operations.
+         * Selects transaction-specific operations for verification and rollback.
+         * 
+         * <p><b>Note:</b> System-level settings (connections, circuit breaker, refresh intervals)
+         * have been moved to {@link com.aerospike.SystemSettings}. Use
+         * {@link com.aerospike.ClusterDefinition#withSystemSettings(com.aerospike.SystemSettings)}
+         * to configure those settings.</p>
          * 
          * <h3>Sub-categories:</h3>
          * <ul>
          *   <li><b>txnVerify</b> - Transaction verification operations (read-like)</li>
          *   <li><b>txnRoll</b> - Transaction rollback operations (write-like)</li>
-         *   <li><b>connections</b> - Connection pool configuration</li>
-         *   <li><b>circuitBreaker</b> - Error threshold and circuit breaker settings</li>
-         *   <li><b>refresh</b> - Cluster state refresh interval</li>
          * </ul>
          * 
          * <h3>Example usage:</h3>
          * <pre>{@code
          * Behavior custom = Behavior.DEFAULT.deriveWithChanges("custom", builder -> builder
-         *     .on(Selectors.system().txnVerify(), ops -> ops
+         *     .on(Selectors.transaction().txnVerify(), ops -> ops
+         *         .consistency(ReadModeSC.LINEARIZE)
          *         .maximumNumberOfCallAttempts(10)
          *         .waitForCallToComplete(Duration.ofSeconds(5))
          *     )
-         *     .on(Selectors.system().connections(), ops -> ops
-         *         .maximumConnectionsPerNode(200)
-         *         .maximumSocketIdleTime(Duration.ofSeconds(120))
+         *     .on(Selectors.transaction().txnRoll(), ops -> ops
+         *         .maximumNumberOfCallAttempts(6)
+         *         .delayBetweenRetries(Duration.ofSeconds(1))
          *     )
          * );
          * }</pre>
          * 
-         * @return selector for system operations
+         * @return selector for transaction operations
          */
-        public static SystemRootSelector system() { 
-            return new SystemRootSel(new SelectionSpec(null, OpShape.SYSTEM, Mode.ANY)); 
+        public static TransactionRootSelector transaction() { 
+            return new TransactionRootSel(new SelectionSpec(null, OpShape.SYSTEM, Mode.ANY)); 
         }
     }
 
@@ -1803,6 +1900,7 @@ public final class Behavior {
         RetryableWriteSelector<T> cp();
         RetryableWritePointSelector<RetryableWritePointAnyModeTweaks> point();
         RetryableWriteBatchSelector<RetryableWriteBatchAnyModeTweaks> batch();
+        RetryableWriteQuerySelector<RetryableWriteQueryAnyModeTweaks> query();
     }
     public interface RetryableWritePointSelector<T extends TweaksView> extends Selector<T> {
         RetryableWritePointSelector<RetryableWritePointApTweaks> ap();
@@ -1812,11 +1910,16 @@ public final class Behavior {
         RetryableWriteBatchSelector<RetryableWriteBatchApTweaks> ap();
         RetryableWriteBatchSelector<RetryableWriteBatchCpTweaks> cp();
     }
+    public interface RetryableWriteQuerySelector<T extends TweaksView> extends Selector<T> {
+        RetryableWriteQuerySelector<RetryableWriteQueryApTweaks> ap();
+        RetryableWriteQuerySelector<RetryableWriteQueryCpTweaks> cp();
+    }
     public interface NonRetryableWriteSelector<T extends TweaksView> extends Selector<T> {
         NonRetryableWriteSelector<T> ap();
         NonRetryableWriteSelector<T> cp();
         NonRetryableWritePointSelector<NonRetryableWritePointAnyModeTweaks> point();
         NonRetryableWriteBatchSelector<NonRetryableWriteBatchAnyModeTweaks> batch();
+        NonRetryableWriteQuerySelector<NonRetryableWriteQueryAnyModeTweaks> query();
     }
     public interface NonRetryableWritePointSelector<T extends TweaksView> extends Selector<T> {
         NonRetryableWritePointSelector<NonRetryableWritePointApTweaks> ap();
@@ -1825,6 +1928,10 @@ public final class Behavior {
     public interface NonRetryableWriteBatchSelector<T extends TweaksView> extends Selector<T> {
         NonRetryableWriteBatchSelector<NonRetryableWriteBatchApTweaks> ap();
         NonRetryableWriteBatchSelector<NonRetryableWriteBatchCpTweaks> cp();
+    }
+    public interface NonRetryableWriteQuerySelector<T extends TweaksView> extends Selector<T> {
+        NonRetryableWriteQuerySelector<NonRetryableWriteQueryApTweaks> ap();
+        NonRetryableWriteQuerySelector<NonRetryableWriteQueryCpTweaks> cp();
     }
 
     // Write shape selectors (retryability-agnostic - apply to both retryable and non-retryable)
@@ -1842,12 +1949,22 @@ public final class Behavior {
      * Root selector for system-level operations.
      * Allows selection of specific system sub-categories: txnVerify, txnRoll, connections, circuitBreaker, refresh.
      */
-    public interface SystemRootSelector {
+    /**
+     * Root selector for transaction operations.
+     * 
+     * <p>Provides access to transaction verification and rollback operation selectors.
+     * These operations are used internally by the client to manage multi-record transactions.</p>
+     * 
+     * <p><b>Note:</b> System-level settings (connections, circuit breaker, refresh intervals)
+     * have been moved to {@link com.aerospike.SystemSettings} and are no longer configurable via Behaviors.
+     * Only transaction-specific operations remain in this selector.</p>
+     * 
+     * @see com.aerospike.SystemSettings
+     * @see com.aerospike.SystemSettingsRegistry
+     */
+    public interface TransactionRootSelector {
         SystemTxnVerifySelector txnVerify();
         SystemTxnRollSelector txnRoll();
-        SystemConnectionsSelector connections();
-        SystemCircuitBreakerSelector circuitBreaker();
-        SystemRefreshSelector refresh();
     }
     
     /**
@@ -1860,20 +1977,6 @@ public final class Behavior {
      */
     public interface SystemTxnRollSelector extends Selector<SystemTxnRollTweaks> {}
     
-    /**
-     * Selector for connection pool configuration.
-     */
-    public interface SystemConnectionsSelector extends Selector<SystemConnectionsTweaks> {}
-    
-    /**
-     * Selector for circuit breaker settings.
-     */
-    public interface SystemCircuitBreakerSelector extends Selector<SystemCircuitBreakerTweaks> {}
-    
-    /**
-     * Selector for cluster refresh settings.
-     */
-    public interface SystemRefreshSelector extends Selector<SystemRefreshTweaks> {}
 
     public static final class WriteRootSel implements WriteRootSelector<WriteRootAnyModeTweaks> {
         private final SelectionSpec spec;
@@ -1939,6 +2042,7 @@ public final class Behavior {
 
         @Override public RetryableWritePointSelector<RetryableWritePointAnyModeTweaks> point() { return new RetryableWritePointSel<>(spec.withShape(OpShape.POINT)); }
         @Override public RetryableWriteBatchSelector<RetryableWriteBatchAnyModeTweaks> batch() { return new RetryableWriteBatchSel<>(spec.withShape(OpShape.BATCH)); }
+        @Override public RetryableWriteQuerySelector<RetryableWriteQueryAnyModeTweaks> query() { return new RetryableWriteQuerySel<>(spec.withShape(OpShape.QUERY)); }
     }
     public static final class RetryableWritePointSel<T extends TweaksView> implements RetryableWritePointSelector<T> {
         private final SelectionSpec spec;
@@ -1954,6 +2058,13 @@ public final class Behavior {
         @Override public RetryableWriteBatchSelector<RetryableWriteBatchApTweaks> ap() { return new RetryableWriteBatchSel<>(spec.withMode(Mode.AP)); }
         @Override public RetryableWriteBatchSelector<RetryableWriteBatchCpTweaks> cp() { return new RetryableWriteBatchSel<>(spec.withMode(Mode.CP)); }
     }
+    public static final class RetryableWriteQuerySel<T extends TweaksView> implements RetryableWriteQuerySelector<T> {
+        private final SelectionSpec spec;
+        RetryableWriteQuerySel(SelectionSpec spec) { this.spec = spec; }
+        @Override public SelectionSpec spec() { return spec; }
+        @Override public RetryableWriteQuerySelector<RetryableWriteQueryApTweaks> ap() { return new RetryableWriteQuerySel<>(spec.withMode(Mode.AP)); }
+        @Override public RetryableWriteQuerySelector<RetryableWriteQueryCpTweaks> cp() { return new RetryableWriteQuerySel<>(spec.withMode(Mode.CP)); }
+    }
     public static final class NonRetryableWriteAnySel implements NonRetryableWriteSelector<NonRetryableWriteAnyModeTweaks> {
         private final SelectionSpec spec;
         NonRetryableWriteAnySel(SelectionSpec spec) { this.spec = spec; }
@@ -1964,6 +2075,7 @@ public final class Behavior {
 
         @Override public NonRetryableWritePointSelector<NonRetryableWritePointAnyModeTweaks> point() { return new NonRetryableWritePointSel<>(spec.withShape(OpShape.POINT)); }
         @Override public NonRetryableWriteBatchSelector<NonRetryableWriteBatchAnyModeTweaks> batch() { return new NonRetryableWriteBatchSel<>(spec.withShape(OpShape.BATCH)); }
+        @Override public NonRetryableWriteQuerySelector<NonRetryableWriteQueryAnyModeTweaks> query() { return new NonRetryableWriteQuerySel<>(spec.withShape(OpShape.QUERY)); }
     }
     public static final class NonRetryableWritePointSel<T extends TweaksView> implements NonRetryableWritePointSelector<T> {
         private final SelectionSpec spec;
@@ -1978,6 +2090,13 @@ public final class Behavior {
         @Override public SelectionSpec spec() { return spec; }
         @Override public NonRetryableWriteBatchSelector<NonRetryableWriteBatchApTweaks> ap() { return new NonRetryableWriteBatchSel<>(spec.withMode(Mode.AP)); }
         @Override public NonRetryableWriteBatchSelector<NonRetryableWriteBatchCpTweaks> cp() { return new NonRetryableWriteBatchSel<>(spec.withMode(Mode.CP)); }
+    }
+    public static final class NonRetryableWriteQuerySel<T extends TweaksView> implements NonRetryableWriteQuerySelector<T> {
+        private final SelectionSpec spec;
+        NonRetryableWriteQuerySel(SelectionSpec spec) { this.spec = spec; }
+        @Override public SelectionSpec spec() { return spec; }
+        @Override public NonRetryableWriteQuerySelector<NonRetryableWriteQueryApTweaks> ap() { return new NonRetryableWriteQuerySel<>(spec.withMode(Mode.AP)); }
+        @Override public NonRetryableWriteQuerySelector<NonRetryableWriteQueryCpTweaks> cp() { return new NonRetryableWriteQuerySel<>(spec.withMode(Mode.CP)); }
     }
 
     // Write shape selector implementations (retryability-agnostic)
@@ -1996,25 +2115,16 @@ public final class Behavior {
         @Override public WriteBatchSelector<WriteBatchCpTweaks> cp() { return new WriteBatchSel<>(spec.withMode(Mode.CP)); }
     }
 
-    // SYSTEM selector implementations
-    static final class SystemRootSel implements SystemRootSelector {
+    // TRANSACTION selector implementations
+    static final class TransactionRootSel implements TransactionRootSelector {
         private final SelectionSpec spec;
-        SystemRootSel(SelectionSpec spec) { this.spec = spec; }
+        TransactionRootSel(SelectionSpec spec) { this.spec = spec; }
         
         @Override public SystemTxnVerifySelector txnVerify() { 
             return new SystemTxnVerifySel(spec.withKind(OpKind.SYSTEM_TXN_VERIFY)); 
         }
         @Override public SystemTxnRollSelector txnRoll() { 
             return new SystemTxnRollSel(spec.withKind(OpKind.SYSTEM_TXN_ROLL)); 
-        }
-        @Override public SystemConnectionsSelector connections() { 
-            return new SystemConnectionsSel(spec.withKind(OpKind.SYSTEM_CONNECTIONS)); 
-        }
-        @Override public SystemCircuitBreakerSelector circuitBreaker() { 
-            return new SystemCircuitBreakerSel(spec.withKind(OpKind.SYSTEM_CIRCUIT_BREAKER)); 
-        }
-        @Override public SystemRefreshSelector refresh() { 
-            return new SystemRefreshSel(spec.withKind(OpKind.SYSTEM_REFRESH)); 
         }
     }
     
@@ -2027,24 +2137,6 @@ public final class Behavior {
     static final class SystemTxnRollSel implements SystemTxnRollSelector {
         private final SelectionSpec spec;
         SystemTxnRollSel(SelectionSpec spec) { this.spec = spec; }
-        @Override public SelectionSpec spec() { return spec; }
-    }
-    
-    static final class SystemConnectionsSel implements SystemConnectionsSelector {
-        private final SelectionSpec spec;
-        SystemConnectionsSel(SelectionSpec spec) { this.spec = spec; }
-        @Override public SelectionSpec spec() { return spec; }
-    }
-    
-    static final class SystemCircuitBreakerSel implements SystemCircuitBreakerSelector {
-        private final SelectionSpec spec;
-        SystemCircuitBreakerSel(SelectionSpec spec) { this.spec = spec; }
-        @Override public SelectionSpec spec() { return spec; }
-    }
-    
-    static final class SystemRefreshSel implements SystemRefreshSelector {
-        private final SelectionSpec spec;
-        SystemRefreshSel(SelectionSpec spec) { this.spec = spec; }
         @Override public SelectionSpec spec() { return spec; }
     }
 
@@ -2066,11 +2158,13 @@ public final class Behavior {
     // write views (retryable)
     RetryableWriteAnyModeTweaks, RetryableWritePointAnyModeTweaks, RetryableWriteBatchAnyModeTweaks,
     RetryableWriteBatchApTweaks, RetryableWriteBatchCpTweaks, RetryableWritePointApTweaks, RetryableWritePointCpTweaks,
+    RetryableWriteQueryAnyModeTweaks, RetryableWriteQueryApTweaks, RetryableWriteQueryCpTweaks,
     // write views (non-retryable)
     NonRetryableWriteAnyModeTweaks, NonRetryableWritePointAnyModeTweaks, NonRetryableWriteBatchAnyModeTweaks,
     NonRetryableWriteBatchApTweaks, NonRetryableWriteBatchCpTweaks, NonRetryableWritePointApTweaks, NonRetryableWritePointCpTweaks,
+    NonRetryableWriteQueryAnyModeTweaks, NonRetryableWriteQueryApTweaks, NonRetryableWriteQueryCpTweaks,
     // system views
-    SystemTxnVerifyTweaks, SystemTxnRollTweaks, SystemConnectionsTweaks, SystemCircuitBreakerTweaks, SystemRefreshTweaks {
+    SystemTxnVerifyTweaks, SystemTxnRollTweaks {
 
         private final Patch patch;
         TweaksProxy(Patch patch) { this.patch = patch; }
@@ -2108,18 +2202,6 @@ public final class Behavior {
         // Read modes
         @Override public TweaksProxy readMode(ReadModeAP mode) { patch.settings.readModeAP = mode; return this; }
         @Override public TweaksProxy consistency(ReadModeSC c) { patch.settings.readModeSC = c; return this; }
-        
-        // System - connections
-        @Override public TweaksProxy minimumConnectionsPerNode(int min) { patch.settings.minimumConnectionsPerNode = min; return this; }
-        @Override public TweaksProxy maximumConnectionsPerNode(int max) { patch.settings.maximumConnectionsPerNode = max; return this; }
-        @Override public TweaksProxy maximumSocketIdleTime(Duration d) { patch.settings.maximumSocketIdleTime = d; return this; }
-        
-        // System - circuitBreaker
-        @Override public TweaksProxy numTendIntervalsInErrorWindow(int intervals) { patch.settings.numTendIntervalsInErrorWindow = intervals; return this; }
-        @Override public TweaksProxy maximumErrorsInErrorWindow(int errors) { patch.settings.maximumErrorsInErrorWindow = errors; return this; }
-        
-        // System - refresh
-        @Override public TweaksProxy tendInterval(Duration interval) { patch.settings.tendInterval = interval; return this; }
     }
 
     // -----------------------------------------------------------------------------------

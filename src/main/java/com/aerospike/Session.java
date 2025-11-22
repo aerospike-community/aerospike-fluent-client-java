@@ -46,14 +46,8 @@ public class Session {
         return this.behavior;
     }
     
-    // TODO: Remove ASNode, InfoData
-    public ASNode[] getNodes() {
-        Node[] nodes = this.client.getNodes();
-        ASNode[] asNodes = new ASNode[nodes.length];
-        for (int i = 0; i < nodes.length; i++) {
-            asNodes[i] = new ASNode(nodes[i]);
-        }
-        return asNodes;
+    public Cluster getCluster() {
+        return cluster;
     }
     
 //    public NamespaceInfo getNamespaceInfo(String namespaceName) {
@@ -65,10 +59,6 @@ public class Session {
     
     public IAerospikeClient getClient() {
         return client;
-    }
-
-    public Cluster getCluster() {
-        return cluster;
     }
     
     public void truncate(DataSet set) {
@@ -258,15 +248,133 @@ public class Session {
         void execute(TransactionalSession txn);
     }
     
-    public <T> T doInTransaction(Transactional<T> operation) {
-        return new TransactionalSession(cluster, behavior).doInTransaction(operation);
+    /**
+     * Executes a transactional operation and returns a value.
+     * 
+     * <p>Use this method when your transaction needs to return a result, such as
+     * reading data or computing a value based on transactional operations.</p>
+     * 
+     * <p><b>Why the different name?</b> This method is named differently from 
+     * {@link #doInTransaction(TransactionalVoid)} to avoid Java type inference ambiguity 
+     * with complex lambda bodies. Without distinct names, the compiler cannot determine 
+     * which overload to use when the lambda contains control flow statements like 
+     * {@code while} loops, forcing users to add explicit {@code return null;} statements.</p>
+     * 
+     * <p>The transaction provides automatic retry logic for transient failures and ensures
+     * proper cleanup. Operations will be retried automatically for result codes like
+     * MRT_BLOCKED, MRT_VERSION_MISMATCH, and TXN_FAILED.</p>
+     * 
+     * <p><b>Example usage:</b>
+     * <pre>{@code
+     * String userName = session.doInTransactionReturning(tx -> {
+     *     RecordStream results = tx.query(users.id(userId)).execute();
+     *     Record record = results.getFirst().get().recordOrThrow();
+     *     return record.getString("name");
+     * });
+     * }</pre>
+     * 
+     * @param <T> the return type
+     * @param operation the transactional operation to execute
+     * @return the value returned by the operation
+     * @throws AerospikeException if the operation fails with a non-retryable error
+     * @throws RuntimeException if any other exception occurs during execution
+     * @see TransactionalSession#doInTransactionReturning(Transactional)
+     * @see #doInTransaction(TransactionalVoid)
+     */
+    public <T> T doInTransactionReturning(Transactional<T> operation) {
+        return new TransactionalSession(cluster, behavior).doInTransactionReturning(operation);
     }
     
+    /**
+     * Executes a transactional operation that does not return a value.
+     * 
+     * <p>Use this method when your transaction only needs to perform operations
+     * without returning a result to the caller. This is the most common case for
+     * transactional writes and updates.</p>
+     * 
+     * <p>The transaction provides automatic retry logic for transient failures and ensures
+     * proper cleanup. Operations will be retried automatically for result codes like
+     * MRT_BLOCKED, MRT_VERSION_MISMATCH, and TXN_FAILED.</p>
+     * 
+     * <p><b>Example usage:</b>
+     * <pre>{@code
+     * session.doInTransaction(txn -> {
+     *     txn.upsert(accounts.id("acc1"))
+     *         .bin("balance").add(-100)
+     *         .execute();
+     *     txn.upsert(accounts.id("acc2"))
+     *         .bin("balance").add(100)
+     *         .execute();
+     * });
+     * }</pre>
+     * 
+     * @param operation the transactional operation to execute
+     * @throws AerospikeException if the operation fails with a non-retryable error
+     * @throws RuntimeException if any other exception occurs during execution
+     * @see TransactionalSession#doInTransaction(TransactionalVoid)
+     * @see #doInTransactionReturning(Transactional)
+     */
     public void doInTransaction(TransactionalVoid operation) {
         new TransactionalSession(cluster, behavior).doInTransaction(txn -> {
             operation.execute(txn);
 //            return null; // Hidden from user
         });
+    }
+    
+    // ------------------------------------
+    // Background Operations functionality
+    // ------------------------------------
+    /**
+     * Enter background task mode for performing set-level operations asynchronously
+     * on the server side. Background operations run as server-side scans/queries
+     * and return an ExecuteTask for monitoring completion.
+     * 
+     * <p><b>Background Operations:</b></p>
+     * <ul>
+     *   <li>Run on entire sets (not specific keys)</li>
+     *   <li>Cannot be part of transactions</li>
+     *   <li>Return ExecuteTask (not record data)</li>
+     *   <li>Support UPDATE, DELETE, and TOUCH operations only</li>
+     * </ul>
+     * 
+     * <p><b>Use Cases:</b></p>
+     * <ul>
+     *   <li>Bulk updates based on criteria</li>
+     *   <li>Cleaning up old records</li>
+     *   <li>Extending TTL for active records</li>
+     * </ul>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * // Update all customers over 30
+     * ExecuteTask task = session.backgroundTask()
+     *     .update(customerDataSet)
+     *     .where("$.age > 30")
+     *     .bin("category").setTo("senior")
+     *     .execute();
+     * 
+     * task.waitTillComplete();
+     * 
+     * // Delete old inactive records
+     * ExecuteTask deleteTask = session.backgroundTask()
+     *     .delete(customerDataSet)
+     *     .where("$.lastLogin < 1609459200000")
+     *     .execute();
+     * 
+     * // Touch active users to extend TTL
+     * ExecuteTask touchTask = session.backgroundTask()
+     *     .touch(activeUsers)
+     *     .where("$.status == 'active'")
+     *     .expireRecordAfter(Duration.ofDays(30))
+     *     .execute();
+     * }</pre>
+     * 
+     * @return BackgroundTaskSession for creating background operations
+     * @see BackgroundTaskSession
+     * @see BackgroundOperationBuilder
+     */
+    public BackgroundTaskSession backgroundTask() {
+        return new BackgroundTaskSession(this);
     }
     
     // ---------------------

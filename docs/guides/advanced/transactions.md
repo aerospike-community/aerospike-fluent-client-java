@@ -94,7 +94,7 @@ public void transferFunds(String fromAccountId, String toAccountId, double amoun
 
 ### 3. Performing a Value-Returning Transaction
 
-Use `doInTransaction(tx -> { ...; return value; })` for transactions that need to return a result.
+Use `doInTransactionReturning(tx -> { ...; return value; })` for transactions that need to return a result.
 
 **Use Case**: Create a new user and immediately return their generated profile.
 
@@ -103,7 +103,7 @@ public UserProfile createNewUser(String username, String email) {
     DataSet users = DataSet.of("app", "users");
     Key userKey = users.id(username);
 
-    return txnSession.doInTransaction(tx -> {
+    return txnSession.doInTransactionReturning(tx -> {
         // 1. Check if the user already exists
         if (tx.query(userKey).withNoBins().execute().hasNext()) {
             throw new UserAlreadyExistsException("Username is taken");

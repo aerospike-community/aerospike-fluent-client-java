@@ -35,13 +35,9 @@ import com.aerospike.policy.Settings;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
-public class OperationBuilder extends AbstractFilterableBuilder implements FilterableOperation<OperationBuilder> {
+public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder> implements FilterableOperation<OperationBuilder> {
     private final List<Key> keys;
-    protected final List<Operation> ops = new ArrayList<>();
-    protected final OpType opType;
-    protected final Session session;
     protected int generation = 0;
-    protected long expirationInSeconds = 0;   // Default, get value from server
     protected long expirationInSecondsForAll = 0;
     protected Txn txnToUse;
     
@@ -115,54 +111,62 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
     }
 
     public OperationBuilder(Session session, Key key, OpType type) {
+        super(session, type);
         this.keys = List.of(key);
-        this.opType = type;
-        this.session = session;
         this.txnToUse = session.getCurrentTransaction();
     }
     
     public OperationBuilder(Session session, List<Key> keys, OpType type) {
+        super(session, type);
         this.keys = keys;
-        this.opType = type;
-        this.session = session;
         this.txnToUse = session.getCurrentTransaction();
     }
     
-    public BinBuilder bin(String binName) {
-        return new BinBuilder(this, binName);
+    // Covariant return type overrides for method chaining
+    @Override
+    public OperationBuilder expireRecordAfter(Duration duration) {
+        super.expireRecordAfter(duration);
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder expireRecordAfterSeconds(int expirationInSeconds) {
+        super.expireRecordAfterSeconds(expirationInSeconds);
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder expireRecordAt(Date date) {
+        super.expireRecordAt(date);
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder expireRecordAt(LocalDateTime date) {
+        super.expireRecordAt(date);
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder withNoChangeInExpiration() {
+        super.withNoChangeInExpiration();
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder neverExpire() {
+        super.neverExpire();
+        return this;
+    }
+    
+    @Override
+    public OperationBuilder expiryFromServerDefault() {
+        super.expiryFromServerDefault();
+        return this;
     }
     
     public BinsValuesBuilder bins(String binName, String... binNames) {
         return new BinsValuesBuilder(this, keys, binName, binNames);
-    }
-    protected OperationBuilder setTo(Bin bin) {
-        this.ops.add(Operation.put(bin));
-        return this;
-    }
-    
-    protected OperationBuilder get(String binName) {
-        this.ops.add(Operation.get(binName));
-        return this;
-    }
-    
-    protected OperationBuilder append(Bin bin) {
-        this.ops.add(Operation.append(bin));
-        return this;
-    }
-    
-    protected OperationBuilder prepend(Bin bin) {
-        this.ops.add(Operation.prepend(bin));
-        return this;
-    }
-
-    protected OperationBuilder add(Bin bin) {
-        this.ops.add(Operation.add(bin));
-        return this;
-    }
-    
-    protected OperationBuilder addOp(Operation op) {
-        this.ops.add(op);
-        return this;
     }
 
     public OperationBuilder ensureGenerationIs(int generation) {
@@ -170,59 +174,6 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
             throw new IllegalArgumentException("Generation must be greater than 0");
         }
         this.generation = generation;
-        return this;
-    }
-    
-    public OperationBuilder expireRecordAfter(Duration duration) {
-        this.expirationInSeconds = duration.toSeconds();
-        return this;
-    }
-    
-    public OperationBuilder expireRecordAfterSeconds(int expirationInSeconds) {
-        this.expirationInSeconds = expirationInSeconds;
-        return this;
-    }
-    
-    protected long getExpirationInSecondsAndCheckValue(Date date) {
-        long expirationInSeconds = (date.getTime() - new Date().getTime())/ 1000L;
-        if (expirationInSeconds < 0) {
-            throw new IllegalArgumentException("Expiration must be set in the future, not to " + date);
-        }
-        return expirationInSeconds;
-    }
-    
-    public OperationBuilder expireRecordAt(Date date) {
-        this.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
-        return this;
-    }
-
-    protected long getExpirationInSecondsAndCheckValue(LocalDateTime date) {
-        LocalDateTime now = LocalDateTime.now();
-        long expirationInSeconds = ChronoUnit.SECONDS.between(now, date);
-        if (expirationInSeconds < 0) {
-            throw new IllegalArgumentException("Expiration must be set in the future, not to " + date);
-        }
-        return expirationInSeconds;
-    }
-    
-
-    public OperationBuilder expireRecordAt(LocalDateTime date) {
-        this.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
-        return this;
-    }
-    
-    public OperationBuilder withNoChangeInExpiration() {
-        this.expirationInSeconds = TTL_NO_CHANGE;
-        return this;
-    }
-    
-    public OperationBuilder neverExpire() {
-        this.expirationInSeconds = TTL_NEVER_EXPIRE;
-        return this;
-    }
-    
-    public OperationBuilder expiryFromServerDefault() {
-        this.expirationInSeconds = TTL_SERVER_DEFAULT;
         return this;
     }
     
@@ -418,9 +369,10 @@ public class OperationBuilder extends AbstractFilterableBuilder implements Filte
         }
     }
     
-    private int getExpirationAsInt() {
+    @Override
+    protected int getExpirationAsInt() {
         long effectiveExpiration = (expirationInSeconds != 0) ? expirationInSeconds : expirationInSecondsForAll;
-        return getExpirationAsInt(effectiveExpiration);
+        return super.getExpirationAsInt(effectiveExpiration);
     }
     
     protected Settings getSettings(boolean retryable) {

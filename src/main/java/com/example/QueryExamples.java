@@ -17,12 +17,14 @@ import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
+import com.aerospike.SystemSettings;
 import com.aerospike.TypeSafeDataSet;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.cdt.MapOrder;
+import com.aerospike.client.task.ExecuteTask;
 import com.aerospike.dslobjects.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
 import com.aerospike.info.classes.Sindex;
@@ -51,6 +53,13 @@ public class QueryExamples {
                 .withNativeCredentials("admin", "password123")
                 .preferringRacks(1)
                 .withLogLevel(Level.DEBUG)
+                .withSystemSettings(builder -> builder
+                    .circuitBreaker(ops -> ops.maximumErrorsInErrorWindow(200))
+                    .connections(conn -> conn
+                            .minimumConnectionsPerNode(200)
+                            .maximumConnectionsPerNode(200)
+                    )
+                )
                 .connect()) {
             
             CustomerMapper customerMapper = new CustomerMapper();
@@ -298,6 +307,18 @@ public class QueryExamples {
                 .objects(customers)
                 .using(customerMapper)
                 .execute());
+
+            System.out.printf("Customer 46 age before scan: %d\n", 
+                    session.query(customerDataSet.id(46)).execute().getFirstRecord().getInt("age"));
+            
+            ExecuteTask task = session.backgroundTask().update(customerDataSet)
+                .bin("age").add(1)
+                .execute();
+            
+            System.out.printf("task id = %d\n", task.getTaskId());
+            task.waitTillComplete();
+            System.out.printf("Customer 46 age after scan: %d\n", 
+                    session.query(customerDataSet.id(46)).execute().getFirstRecord().getInt("age"));
 
             // Batch partition filter test
             List<Key> keys = customerDataSet.ids(IntStream.rangeClosed(20, 48).toArray());

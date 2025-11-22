@@ -29,9 +29,11 @@ TransactionalSession txSession = cluster.createTransactionalSession(Behavior.DEF
 
 ## Methods
 
-### `doInTransaction(Transactional<T> operation)`
+### `doInTransactionReturning(Transactional<T> operation)`
 
 Executes a transactional operation that returns a value. The operation is defined as a lambda expression.
+
+**Note:** This method is named differently from `doInTransaction(TransactionalVoid)` to avoid Java type inference ambiguity when using complex lambda bodies with control flow statements like `while` loops.
 
 **Parameters:**
 | Name | Type | Description |
@@ -50,7 +52,7 @@ Executes a transactional operation that returns a value. The operation is define
 long amountToTransfer = 100L;
 
 try {
-    txSession.doInTransaction(tx -> {
+    txSession.doInTransactionReturning(tx -> {
         // Read the current balance from both accounts
         long fromBalance = tx.query(accounts.id("acc1")).execute().getFirst().get().record.getLong("balance");
         long toBalance = tx.query(accounts.id("acc2")).execute().getFirst().get().record.getLong("balance");

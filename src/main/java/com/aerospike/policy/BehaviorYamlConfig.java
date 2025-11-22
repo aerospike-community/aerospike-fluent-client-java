@@ -16,9 +16,15 @@ class BehaviorYamlConfig {
     @JsonProperty("behaviors")
     private List<BehaviorConfig> behaviors;
     
+    @JsonProperty("system")
+    private SystemConfig system;
+    
     // Getters and setters
     public List<BehaviorConfig> getBehaviors() { return behaviors; }
     public void setBehaviors(List<BehaviorConfig> behaviors) { this.behaviors = behaviors; }
+    
+    public SystemConfig getSystem() { return system; }
+    public void setSystem(SystemConfig system) { this.system = system; }
     
     // Individual behavior configuration
     public static class BehaviorConfig {
@@ -67,15 +73,6 @@ class BehaviorYamlConfig {
         @JsonProperty("systemTxnRoll")
         private SystemTxnRollConfig systemTxnRoll;
         
-        @JsonProperty("systemConnections")
-        private SystemConnectionsConfig systemConnections;
-        
-        @JsonProperty("systemCircuitBreaker")
-        private SystemCircuitBreakerConfig systemCircuitBreaker;
-        
-        @JsonProperty("systemRefresh")
-        private SystemRefreshConfig systemRefresh;
-        
         // Getters and setters
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
@@ -121,15 +118,6 @@ class BehaviorYamlConfig {
         
         public SystemTxnRollConfig getSystemTxnRoll() { return systemTxnRoll; }
         public void setSystemTxnRoll(SystemTxnRollConfig systemTxnRoll) { this.systemTxnRoll = systemTxnRoll; }
-        
-        public SystemConnectionsConfig getSystemConnections() { return systemConnections; }
-        public void setSystemConnections(SystemConnectionsConfig systemConnections) { this.systemConnections = systemConnections; }
-        
-        public SystemCircuitBreakerConfig getSystemCircuitBreaker() { return systemCircuitBreaker; }
-        public void setSystemCircuitBreaker(SystemCircuitBreakerConfig systemCircuitBreaker) { this.systemCircuitBreaker = systemCircuitBreaker; }
-        
-        public SystemRefreshConfig getSystemRefresh() { return systemRefresh; }
-        public void setSystemRefresh(SystemRefreshConfig systemRefresh) { this.systemRefresh = systemRefresh; }
     }
     
     // Base policy configuration
@@ -289,8 +277,58 @@ class BehaviorYamlConfig {
         // replicaOrder, waitForCallToComplete, waitForConnectionToComplete, waitForSocketResponseAfterCallFails
     }
     
-    // System - Connections configuration
-    public static class SystemConnectionsConfig {
+    // -----------------------------------------------------------------------------------
+    // System Settings Configuration (for unified YAML)
+    // -----------------------------------------------------------------------------------
+    
+    /**
+     * Top-level system settings configuration containing default and cluster-specific settings.
+     */
+    public static class SystemConfig {
+        @JsonProperty("default")
+        private SystemSettingsConfig defaultSettings;
+        
+        @JsonProperty("clusters")
+        private java.util.Map<String, SystemSettingsConfig> clusters;
+        
+        public SystemSettingsConfig getDefaultSettings() { return defaultSettings; }
+        public void setDefaultSettings(SystemSettingsConfig defaultSettings) { 
+            this.defaultSettings = defaultSettings; 
+        }
+        
+        public java.util.Map<String, SystemSettingsConfig> getClusters() { return clusters; }
+        public void setClusters(java.util.Map<String, SystemSettingsConfig> clusters) { 
+            this.clusters = clusters; 
+        }
+    }
+    
+    /**
+     * System settings for a single cluster or default settings.
+     */
+    public static class SystemSettingsConfig {
+        @JsonProperty("connections")
+        private ConnectionsConfig connections;
+        
+        @JsonProperty("circuitBreaker")
+        private CircuitBreakerConfig circuitBreaker;
+        
+        @JsonProperty("refresh")
+        private RefreshConfig refresh;
+        
+        public ConnectionsConfig getConnections() { return connections; }
+        public void setConnections(ConnectionsConfig connections) { this.connections = connections; }
+        
+        public CircuitBreakerConfig getCircuitBreaker() { return circuitBreaker; }
+        public void setCircuitBreaker(CircuitBreakerConfig circuitBreaker) { this.circuitBreaker = circuitBreaker; }
+        
+        public RefreshConfig getRefresh() { return refresh; }
+        public void setRefresh(RefreshConfig refresh) { this.refresh = refresh; }
+    }
+    
+    /**
+     * Connection pool configuration.
+     */
+    public static class ConnectionsConfig {
         @JsonProperty("minimumConnectionsPerNode")
         private Integer minimumConnectionsPerNode;
         
@@ -303,17 +341,25 @@ class BehaviorYamlConfig {
         private Duration maximumSocketIdleTime;
         
         public Integer getMinimumConnectionsPerNode() { return minimumConnectionsPerNode; }
-        public void setMinimumConnectionsPerNode(Integer minimumConnectionsPerNode) { this.minimumConnectionsPerNode = minimumConnectionsPerNode; }
+        public void setMinimumConnectionsPerNode(Integer minimumConnectionsPerNode) { 
+            this.minimumConnectionsPerNode = minimumConnectionsPerNode; 
+        }
         
         public Integer getMaximumConnectionsPerNode() { return maximumConnectionsPerNode; }
-        public void setMaximumConnectionsPerNode(Integer maximumConnectionsPerNode) { this.maximumConnectionsPerNode = maximumConnectionsPerNode; }
+        public void setMaximumConnectionsPerNode(Integer maximumConnectionsPerNode) { 
+            this.maximumConnectionsPerNode = maximumConnectionsPerNode; 
+        }
         
         public Duration getMaximumSocketIdleTime() { return maximumSocketIdleTime; }
-        public void setMaximumSocketIdleTime(Duration maximumSocketIdleTime) { this.maximumSocketIdleTime = maximumSocketIdleTime; }
+        public void setMaximumSocketIdleTime(Duration maximumSocketIdleTime) { 
+            this.maximumSocketIdleTime = maximumSocketIdleTime; 
+        }
     }
     
-    // System - Circuit Breaker configuration
-    public static class SystemCircuitBreakerConfig {
+    /**
+     * Circuit breaker configuration.
+     */
+    public static class CircuitBreakerConfig {
         @JsonProperty("numTendIntervalsInErrorWindow")
         private Integer numTendIntervalsInErrorWindow;
         
@@ -321,20 +367,28 @@ class BehaviorYamlConfig {
         private Integer maximumErrorsInErrorWindow;
         
         public Integer getNumTendIntervalsInErrorWindow() { return numTendIntervalsInErrorWindow; }
-        public void setNumTendIntervalsInErrorWindow(Integer numTendIntervalsInErrorWindow) { this.numTendIntervalsInErrorWindow = numTendIntervalsInErrorWindow; }
+        public void setNumTendIntervalsInErrorWindow(Integer numTendIntervalsInErrorWindow) { 
+            this.numTendIntervalsInErrorWindow = numTendIntervalsInErrorWindow; 
+        }
         
         public Integer getMaximumErrorsInErrorWindow() { return maximumErrorsInErrorWindow; }
-        public void setMaximumErrorsInErrorWindow(Integer maximumErrorsInErrorWindow) { this.maximumErrorsInErrorWindow = maximumErrorsInErrorWindow; }
+        public void setMaximumErrorsInErrorWindow(Integer maximumErrorsInErrorWindow) { 
+            this.maximumErrorsInErrorWindow = maximumErrorsInErrorWindow; 
+        }
     }
     
-    // System - Refresh configuration
-    public static class SystemRefreshConfig {
+    /**
+     * Cluster refresh configuration.
+     */
+    public static class RefreshConfig {
         @JsonDeserialize(using = DurationDeserializer.class)
         @JsonSerialize(using = DurationSerializer.class)
         @JsonProperty("tendInterval")
         private Duration tendInterval;
         
         public Duration getTendInterval() { return tendInterval; }
-        public void setTendInterval(Duration tendInterval) { this.tendInterval = tendInterval; }
+        public void setTendInterval(Duration tendInterval) { 
+            this.tendInterval = tendInterval; 
+        }
     }
 } 

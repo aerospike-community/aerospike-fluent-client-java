@@ -26,6 +26,12 @@ import com.aerospike.query.SortProperties;
  * after they have been fetched from the database. It provides a builder-style
  * API for configuring sort order and page size.</p>
  * 
+ * <p><strong><b>Note:</b> As Aerospike does not intrinsically support ordering or
+ * pagination by a user supplied field, this class will load the contents of the 
+ * stream into memory. Please ensure your application server has enough memory 
+ * available to support this.
+ * </strong></p>
+ * 
  * <h2>Sorting Behavior</h2>
  * 
  * <p>Each call to any {@code sortBy()} method replaces the entire sort criteria.
@@ -229,6 +235,31 @@ public class NavigatableRecordStream implements ResettablePagination, Closeable 
      */
     public NavigatableRecordStream sortBy(List<SortProperties> sortPropertyList) {
         this.sortInfo = sortPropertyList;
+        applySort();
+        return this;
+    }
+    
+    /**
+     * Sorts the records by multiple sort properties.
+     * 
+     * <p>This method <b>replaces</b> any existing sort criteria with the new list.
+     * The records are immediately re-sorted and iteration is reset. This is the
+     * recommended way to sort by multiple columns.</p>
+     * 
+     * <p>Example:</p>
+     * <pre>{@code
+     * navigatable.sortBy(
+     *     SortProperties.ascendingIgnoreCase("lastName"),    // Primary sort
+     *     SortProperties.descendingIgnoreCase("firstName"),  // Secondary sort
+     *     SortProperties.descending("age")                   // Tertiary sort
+     * );
+     * }</pre>
+     * 
+     * @param sortPropertyList the list of sort properties to apply
+     * @return this NavigatableRecordStream for method chaining
+     */
+    public NavigatableRecordStream sortBy(SortProperties ... sortPropertyList) {
+        this.sortInfo = Arrays.asList(sortPropertyList);
         applySort();
         return this;
     }

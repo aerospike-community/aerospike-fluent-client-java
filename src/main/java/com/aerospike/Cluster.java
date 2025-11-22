@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.Set;
 
 import com.aerospike.client.IAerospikeClient;
+import com.aerospike.client.Log;
 import com.aerospike.dsl.Index;
 import com.aerospike.policy.Behavior;
 
@@ -33,17 +34,24 @@ public class Cluster implements Closeable {
      */
     public static final Duration INDEX_REFRESH = Duration.ofSeconds(5);
 
-    private IAerospikeClient client;
-    private IndexesMonitor indexesMonitor;
+    private final IAerospikeClient client;
+    private final IndexesMonitor indexesMonitor;
+    private volatile String clusterName;  // May be null initially, discovered later
     // TODO: Where should this live?
     private RecordMappingFactory recordMappingFactory = null;
 
     
     // package visibility
-    Cluster(IAerospikeClient client) {
+    Cluster(IAerospikeClient client, String providedClusterName) {
         this.client = client;
+        this.clusterName = providedClusterName;
         this.indexesMonitor = new IndexesMonitor();
         this.indexesMonitor.startMonitor(createSession(Behavior.DEFAULT), INDEX_REFRESH);
+        
+        // If no cluster name provided, discover it from the server
+        if (providedClusterName == null || providedClusterName.isEmpty()) {
+            discoverClusterName();
+        }
     }
     
     /**
@@ -127,6 +135,72 @@ public class Cluster implements Closeable {
      */
     public boolean isConnected() {
         return client.isConnected();
+    }
+    
+    /**
+     * Gets the cluster name.
+     * 
+     * <p>This may be the name provided via {@code validateClusterName()}, or the
+     * name discovered from the server if none was provided.</p>
+     * 
+     * @return the cluster name, or null if not specified and not yet discovered
+     */
+    public String getClusterName() {
+        return clusterName;
+    }
+    
+    /**
+     * Discovers the cluster name from the server.
+     * Called automatically if no cluster name was provided at connection time.
+     */
+    private void discoverClusterName() {
+        try {
+            String discovered = client.getCluster().getClusterName();
+            if (discovered != null && !discovered.isEmpty()) {
+                this.clusterName = discovered;
+                // Notify registry - may upgrade to cluster-specific settings
+                SystemSettingsRegistry.getInstance().updateClusterName(this, discovered);
+            }
+        } catch (Exception e) {
+            // Cluster name discovery failed, continue with null name
+            Log.warn("Failed to discover cluster name: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Applies system settings dynamically to this cluster.
+     * Called by {@link SystemSettingsRegistry} when settings are updated.
+     * 
+     * <p><b>Note:</b> This is an internal method and should not be called directly.
+     * System settings are automatically managed by the registry.</p>
+     * 
+     * <p><b>Limitation:</b> Most system settings cannot be changed dynamically with
+     * the current Aerospike client API. They are applied at connection time via
+     * {@link com.aerospike.client.policy.ClientPolicy}. This method is provided for
+     * future compatibility when dynamic updates become available.</p>
+     * 
+     * @param settings the system settings to apply
+     */
+    void applySystemSettings(SystemSettings settings) {
+        if (settings == null) {
+            return;
+        }
+        
+        // Currently, the Aerospike Java client does not support dynamic updates
+        // to system-level settings like connection pool sizes, socket idle times,
+        // circuit breaker settings, or tend intervals.
+        //
+        // These settings are applied at connection time via ClientPolicy.
+        // This method is a placeholder for future enhancement.
+        //
+        // When dynamic updates become available, implement them here:
+        // - client.setMinConnsPerNode(settings.getMinimumConnectionsPerNode())
+        // - client.setMaxConnsPerNode(settings.getMaximumConnectionsPerNode())
+        // - etc.
+        
+        Log.info("System settings updated for cluster '" + 
+            (clusterName != null ? clusterName : "(unnamed)") + 
+            "'. Note: Settings will take effect on next connection.");
     }
     
     /**

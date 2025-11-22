@@ -13,7 +13,7 @@ import com.aerospike.client.cdt.MapOrder;
 import com.aerospike.client.cdt.MapPolicy;
 import com.aerospike.client.cdt.MapWriteFlags;
 
-public class AbstractCdtBuilder {
+public class AbstractCdtBuilder<T extends AbstractOperationBuilder<T>> {
     public static final MapPolicy KEY_ORDERED = new MapPolicy(MapOrder.KEY_ORDERED, MapWriteFlags.DEFAULT);
     public static final MapPolicy KEY_ORDERED_CREATE_ONLY = new MapPolicy(MapOrder.KEY_ORDERED, MapWriteFlags.CREATE_ONLY);
     public static final MapPolicy KEY_ORDERED_CREATE_ONLY_NO_FAIL = new MapPolicy(MapOrder.KEY_ORDERED, MapWriteFlags.CREATE_ONLY | MapWriteFlags.NO_FAIL);
@@ -26,11 +26,11 @@ public class AbstractCdtBuilder {
     public static final ListPolicy LIST_ORD_UNIQUE_NO_FAIL = new ListPolicy(ListOrder.ORDERED, ListWriteFlags.ADD_UNIQUE | ListWriteFlags.NO_FAIL);
     public static final ListPolicy LIST_UNORD_UNIQUE_NO_FAIL = new ListPolicy(ListOrder.UNORDERED, ListWriteFlags.ADD_UNIQUE | ListWriteFlags.NO_FAIL);
 
-    protected final OperationBuilder opBuilder;
+    protected final T opBuilder;
     protected final String binName;
     protected final CdtOperationParams params;
 
-    public AbstractCdtBuilder(OperationBuilder opBuilder, String binName, CdtOperationParams params) {
+    public AbstractCdtBuilder(T opBuilder, String binName, CdtOperationParams params) {
         this.opBuilder = opBuilder;
         this.binName = binName;
         this.params = params;
@@ -39,30 +39,30 @@ public class AbstractCdtBuilder {
     public OperationBuilder mapClear() {
         if (params != null) {
             params.pushCurrentToContext();
-            return this.opBuilder.addOp(MapOperation.clear(binName, params.context()));
+            return (OperationBuilder) this.opBuilder.addOp(MapOperation.clear(binName, params.context()));
         }
         else {
-            return this.opBuilder.addOp(MapOperation.clear(binName));
+            return (OperationBuilder) this.opBuilder.addOp(MapOperation.clear(binName));
         }
     }
     
     public OperationBuilder mapSize() {
         if (params != null) {
             params.pushCurrentToContext();
-            return this.opBuilder.addOp(MapOperation.size(binName, params.context()));
+            return (OperationBuilder) this.opBuilder.addOp(MapOperation.size(binName, params.context()));
         }
         else {
-            return this.opBuilder.addOp(MapOperation.size(binName));
+            return (OperationBuilder) this.opBuilder.addOp(MapOperation.size(binName));
         }
     }
     
     public OperationBuilder listAppend(Value value) {
         if (params != null) {
             params.pushCurrentToContext();
-            return this.opBuilder.addOp(ListOperation.append(binName, value, params.context()));
+            return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(binName, value, params.context()));
         }
         else {
-            return this.opBuilder.addOp(ListOperation.append(binName, value));
+            return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(binName, value));
         }
     }
     public OperationBuilder listAppend(long value) {
@@ -91,18 +91,18 @@ public class AbstractCdtBuilder {
         if (params != null) {
             params.pushCurrentToContext();
             if (allowFailures) {
-                return this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE_NO_FAIL, binName, value, params.context()));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE_NO_FAIL, binName, value, params.context()));
             }
             else {
-                return this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE, binName, value, params.context()));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE, binName, value, params.context()));
             }
         }
         else {
             if (allowFailures) {
-                return this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE_NO_FAIL, binName, value));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE_NO_FAIL, binName, value));
             }
             else {
-                return this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE, binName, value));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_UNORD_UNIQUE, binName, value));
             }
         }
     }
@@ -131,10 +131,10 @@ public class AbstractCdtBuilder {
     public OperationBuilder listAdd(Value value) {
         if (params != null) {
             params.pushCurrentToContext();
-            return this.opBuilder.addOp(ListOperation.append(LIST_ORD, binName, value, params.context()));
+            return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_ORD, binName, value, params.context()));
         }
         else {
-            return this.opBuilder.addOp(ListOperation.append(LIST_ORD, binName, value));
+            return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_ORD, binName, value));
         }
     }
     /** Add an item to the appropriate spot in an ordered list */
@@ -172,18 +172,18 @@ public class AbstractCdtBuilder {
         if (params != null) {
             params.pushCurrentToContext();
             if (allowFailures) {
-                return this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE_NO_FAIL, binName, value, params.context()));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE_NO_FAIL, binName, value, params.context()));
             }
             else {
-                return this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE, binName, value, params.context()));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE, binName, value, params.context()));
             }
         }
         else {
             if (allowFailures) {
-                return this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE_NO_FAIL, binName, value));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE_NO_FAIL, binName, value));
             }
             else {
-                return this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE, binName, value));
+                return (OperationBuilder) this.opBuilder.addOp(ListOperation.append(LIST_ORD_UNIQUE, binName, value));
             }
         }
     }

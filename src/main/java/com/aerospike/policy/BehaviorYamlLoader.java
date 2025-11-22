@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import com.aerospike.SystemSettings;
+import com.aerospike.SystemSettingsRegistry;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -79,6 +81,11 @@ class BehaviorYamlLoader {
                     registry.registerBehavior(newBehavior);
                 }
             }
+        }
+        
+        // Load system settings from the same configuration
+        if (config.getSystem() != null) {
+            loadSystemSettings(config.getSystem());
         }
         
         return updatedBehaviors;
@@ -229,9 +236,9 @@ class BehaviorYamlLoader {
             });
         }
         
-        // Apply system - txnVerify configuration
+        // Apply transaction - txnVerify configuration
         if (config.getSystemTxnVerify() != null) {
-            builder.on(Behavior.Selectors.system().txnVerify(), ops -> {
+            builder.on(Behavior.Selectors.transaction().txnVerify(), ops -> {
                 applyCommonConfig(ops, config.getSystemTxnVerify());
                 if (config.getSystemTxnVerify().getConsistency() != null) {
                     ops.consistency(config.getSystemTxnVerify().getConsistency());
@@ -239,49 +246,10 @@ class BehaviorYamlLoader {
             });
         }
         
-        // Apply system - txnRoll configuration
+        // Apply transaction - txnRoll configuration
         if (config.getSystemTxnRoll() != null) {
-            builder.on(Behavior.Selectors.system().txnRoll(), ops -> {
+            builder.on(Behavior.Selectors.transaction().txnRoll(), ops -> {
                 applyCommonConfig(ops, config.getSystemTxnRoll());
-            });
-        }
-        
-        // Apply system - connections configuration
-        if (config.getSystemConnections() != null) {
-            builder.on(Behavior.Selectors.system().connections(), ops -> {
-                BehaviorYamlConfig.SystemConnectionsConfig connConfig = config.getSystemConnections();
-                if (connConfig.getMinimumConnectionsPerNode() != null) {
-                    ops.minimumConnectionsPerNode(connConfig.getMinimumConnectionsPerNode());
-                }
-                if (connConfig.getMaximumConnectionsPerNode() != null) {
-                    ops.maximumConnectionsPerNode(connConfig.getMaximumConnectionsPerNode());
-                }
-                if (connConfig.getMaximumSocketIdleTime() != null) {
-                    ops.maximumSocketIdleTime(connConfig.getMaximumSocketIdleTime());
-                }
-            });
-        }
-        
-        // Apply system - circuitBreaker configuration
-        if (config.getSystemCircuitBreaker() != null) {
-            builder.on(Behavior.Selectors.system().circuitBreaker(), ops -> {
-                BehaviorYamlConfig.SystemCircuitBreakerConfig cbConfig = config.getSystemCircuitBreaker();
-                if (cbConfig.getNumTendIntervalsInErrorWindow() != null) {
-                    ops.numTendIntervalsInErrorWindow(cbConfig.getNumTendIntervalsInErrorWindow());
-                }
-                if (cbConfig.getMaximumErrorsInErrorWindow() != null) {
-                    ops.maximumErrorsInErrorWindow(cbConfig.getMaximumErrorsInErrorWindow());
-                }
-            });
-        }
-        
-        // Apply system - refresh configuration
-        if (config.getSystemRefresh() != null) {
-            builder.on(Behavior.Selectors.system().refresh(), ops -> {
-                BehaviorYamlConfig.SystemRefreshConfig refreshConfig = config.getSystemRefresh();
-                if (refreshConfig.getTendInterval() != null) {
-                    ops.tendInterval(refreshConfig.getTendInterval());
-                }
             });
         }
     }
@@ -338,5 +306,82 @@ class BehaviorYamlLoader {
         if (config.getAllowInlineSsdAccess() != null) {
             tweaks.allowInlineSsdAccess(config.getAllowInlineSsdAccess());
         }
+    }
+    
+    /**
+     * Load system settings from YAML configuration and update the registry.
+     * 
+     * @param systemConfig The system configuration from YAML
+     */
+    private static void loadSystemSettings(BehaviorYamlConfig.SystemConfig systemConfig) {
+        SystemSettingsRegistry registry = SystemSettingsRegistry.getInstance();
+        
+        // Load default settings
+        if (systemConfig.getDefaultSettings() != null) {
+            SystemSettings defaultSettings = convertToSystemSettings(systemConfig.getDefaultSettings());
+            registry.updateDefaultSettings(defaultSettings);
+        }
+        
+        // Load cluster-specific settings
+        if (systemConfig.getClusters() != null) {
+            for (Map.Entry<String, BehaviorYamlConfig.SystemSettingsConfig> entry : 
+                 systemConfig.getClusters().entrySet()) {
+                SystemSettings clusterSettings = convertToSystemSettings(entry.getValue());
+                registry.updateClusterSettings(entry.getKey(), clusterSettings);
+            }
+        }
+    }
+    
+    /**
+     * Convert YAML SystemSettingsConfig to SystemSettings instance using lambda API.
+     * 
+     * @param config The system settings configuration from YAML
+     * @return A SystemSettings instance
+     */
+    private static SystemSettings convertToSystemSettings(
+            BehaviorYamlConfig.SystemSettingsConfig config) {
+        
+        SystemSettings.Builder builder = SystemSettings.builder();
+        
+        // Connections settings
+        if (config.getConnections() != null) {
+            BehaviorYamlConfig.ConnectionsConfig connConfig = config.getConnections();
+            builder.connections(ops -> {
+                if (connConfig.getMinimumConnectionsPerNode() != null) {
+                    ops.minimumConnectionsPerNode(connConfig.getMinimumConnectionsPerNode());
+                }
+                if (connConfig.getMaximumConnectionsPerNode() != null) {
+                    ops.maximumConnectionsPerNode(connConfig.getMaximumConnectionsPerNode());
+                }
+                if (connConfig.getMaximumSocketIdleTime() != null) {
+                    ops.maximumSocketIdleTime(connConfig.getMaximumSocketIdleTime());
+                }
+            });
+        }
+        
+        // Circuit breaker settings
+        if (config.getCircuitBreaker() != null) {
+            BehaviorYamlConfig.CircuitBreakerConfig cbConfig = config.getCircuitBreaker();
+            builder.circuitBreaker(ops -> {
+                if (cbConfig.getNumTendIntervalsInErrorWindow() != null) {
+                    ops.numTendIntervalsInErrorWindow(cbConfig.getNumTendIntervalsInErrorWindow());
+                }
+                if (cbConfig.getMaximumErrorsInErrorWindow() != null) {
+                    ops.maximumErrorsInErrorWindow(cbConfig.getMaximumErrorsInErrorWindow());
+                }
+            });
+        }
+        
+        // Refresh settings
+        if (config.getRefresh() != null) {
+            BehaviorYamlConfig.RefreshConfig refreshConfig = config.getRefresh();
+            builder.refresh(ops -> {
+                if (refreshConfig.getTendInterval() != null) {
+                    ops.tendInterval(refreshConfig.getTendInterval());
+                }
+            });
+        }
+        
+        return builder.build();
     }
 } 

@@ -2,6 +2,7 @@ package com.aerospike;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.Host;
@@ -41,6 +42,7 @@ public class ClusterDefinition {
     private boolean useServicesAlternate = false;
     private Level logLevel = Level.WARN;
     TlsBuilder tlsBuilder = null;
+    SystemSettings systemSettings = null;  // Level 2: Code-provided settings
     
     private final Host[] hosts;
     
@@ -215,6 +217,77 @@ public class ClusterDefinition {
         this.tlsBuilder = tlsBuilder;
     }
     
+    /**
+     * Sets system settings for this cluster using a pre-built SystemSettings instance.
+     * 
+     * <p>System settings control cluster-wide behavior such as connection pool size,
+     * circuit breaker configuration, and cluster refresh intervals. These settings
+     * are applied at connection time and can be dynamically updated.</p>
+     * 
+     * <p><b>Priority:</b> Code-provided settings (Level 2) override hard-coded defaults
+     * but are overridden by YAML default and cluster-specific settings.</p>
+     * 
+     * <p>Example usage:</p>
+     * <pre>{@code
+     * SystemSettings settings = SystemSettings.builder()
+     *     .connections(ops -> ops
+     *         .minimumConnectionsPerNode(150)
+     *         .maximumConnectionsPerNode(500)
+     *     )
+     *     .build();
+     * 
+     * new ClusterDefinition("localhost", 3000)
+     *     .withSystemSettings(settings)
+     *     .connect();
+     * }</pre>
+     * 
+     * @param settings the system settings to apply
+     * @return this ClusterDefinition for method chaining
+     * @see SystemSettings
+     * @see #withSystemSettings(Consumer)
+     */
+    public ClusterDefinition withSystemSettings(SystemSettings settings) {
+        this.systemSettings = settings;
+        return this;
+    }
+    
+    /**
+     * Sets system settings for this cluster using a lambda configurator.
+     * 
+     * <p>This is the recommended approach for inline configuration, consistent with
+     * the Behavior API. It allows concise, fluent configuration without requiring
+     * explicit builder management.</p>
+     * 
+     * <p><b>Priority:</b> Code-provided settings (Level 2) override hard-coded defaults
+     * but are overridden by YAML default and cluster-specific settings.</p>
+     * 
+     * <p>Example usage:</p>
+     * <pre>{@code
+     * new ClusterDefinition("localhost", 3000)
+     *     .withSystemSettings(builder -> builder
+     *         .connections(ops -> ops
+     *             .minimumConnectionsPerNode(150)
+     *             .maximumConnectionsPerNode(500)
+     *         )
+     *         .circuitBreaker(ops -> ops
+     *             .maximumErrorsInErrorWindow(200)
+     *         )
+     *     )
+     *     .connect();
+     * }</pre>
+     * 
+     * @param configurator lambda to configure system settings
+     * @return this ClusterDefinition for method chaining
+     * @see SystemSettings
+     * @see #withSystemSettings(SystemSettings)
+     */
+    public ClusterDefinition withSystemSettings(Consumer<SystemSettings.Builder> configurator) {
+        SystemSettings.Builder builder = SystemSettings.builder();
+        configurator.accept(builder);
+        this.systemSettings = builder.build();
+        return this;
+    }
+    
     
     private ClientPolicy getPolicy() {
         ClientPolicy policy = new ClientPolicy();
@@ -272,6 +345,10 @@ public class ClusterDefinition {
      * parameters. The returned Cluster should be closed when no longer needed
      * to properly release resources.</p>
      * 
+     * <p><b>System Settings:</b> The cluster will use system settings based on
+     * a 4-level priority hierarchy. If {@code validateClusterName()} was called,
+     * cluster-specific settings from YAML will be used if available.</p>
+     * 
      * <p>Example with try-with-resources:</p>
      * <pre>{@code
      * try (Cluster cluster = new ClusterDefinition("localhost", 3100).connect()) {
@@ -286,9 +363,21 @@ public class ClusterDefinition {
      */
     public Cluster connect() {
         ClientPolicy policy = getPolicy();
+        
+        // Apply system settings to policy (4-level hierarchy)
+        SystemSettings effectiveSettings = SystemSettingsRegistry.getInstance()
+            .getEffectiveSettings(clusterName, systemSettings);
+        effectiveSettings.applyTo(policy);
+        
         Host[] effectiveHosts = getEffectiveHosts();
         IAerospikeClient client = new AerospikeClient(policy, effectiveHosts);
-        return new Cluster(client);
+        Cluster cluster = new Cluster(client, clusterName);
+        
+        // Register with registry for dynamic updates
+        SystemSettingsRegistry.getInstance()
+            .registerCluster(cluster, clusterName, systemSettings);
+        
+        return cluster;
     }
     
     /**

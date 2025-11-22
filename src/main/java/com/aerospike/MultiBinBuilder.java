@@ -16,7 +16,7 @@ public class MultiBinBuilder {
         this.binNames = binNames;
     }
     
-    public OperationBuilder values(Object ... objects) {
+    public AbstractOperationBuilder values(Object ... objects) {
         if (objects.length != 1+binNames.length) {
             throw new IllegalArgumentException(String.format(
                     "When calling '.values(...)' to specify the values for multiple bins,"
@@ -32,25 +32,25 @@ public class MultiBinBuilder {
         return opBuilder;
     }
     
-    public OperationBuilder setTo(String value) {
+    public AbstractOperationBuilder setTo(String value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
-    public OperationBuilder setTo(int value) {
+    public AbstractOperationBuilder setTo(int value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
-    public OperationBuilder setTo(long value) {
+    public AbstractOperationBuilder setTo(long value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
-    public OperationBuilder setTo(float value) {
+    public AbstractOperationBuilder setTo(float value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
-    public OperationBuilder setTo(double value) {
+    public AbstractOperationBuilder setTo(double value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
-    public OperationBuilder setTo(boolean value) {
+    public AbstractOperationBuilder setTo(boolean value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
-    public OperationBuilder setTo(byte[] value) {
+    public AbstractOperationBuilder setTo(byte[] value) {
         return opBuilder.setTo(new Bin(binName, value));
     }
 }
