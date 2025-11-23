@@ -7,6 +7,7 @@ import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Log;
 import com.aerospike.client.exp.Exp;
+import com.aerospike.client.policy.QueryDuration;
 import com.aerospike.client.policy.QueryPolicy;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.Statement;
@@ -70,6 +71,11 @@ class IndexQueryBuilderImpl extends QueryImpl {
         stmt.setNamespace(dataSet.getNamespace());
         stmt.setSetName(dataSet.getSet());
         stmt.setBinNames(getQueryBuilder().getBinNames());
+        // If an RPS is set, the query type must be long
+        if (getQueryBuilder().getRecordsPerSecond() > 0) {
+            stmt.setRecordsPerSecond(getQueryBuilder().getRecordsPerSecond());
+            queryPolicy.expectedDuration = QueryDuration.LONG;
+        }
 
         if (getQueryBuilder().getDsl() != null) {
             ParseResult parseResult = getQueryBuilder().getDsl().process(this.dataSet.getNamespace(), getSession());

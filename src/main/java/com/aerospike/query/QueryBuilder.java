@@ -62,7 +62,9 @@ import com.aerospike.dslobjects.BooleanExpression;
  * @see SortDir
  * @see SortProperties
  */
-public class QueryBuilder extends AbstractFilterableBuilder implements KeyBasedQueryBuilderInterface<QueryBuilder> {
+public class QueryBuilder extends AbstractFilterableBuilder implements 
+            KeyBasedQueryBuilderInterface<QueryBuilder>, 
+            IndexBasedQueryBuilderInterface<QueryBuilder> {
     private final QueryImpl implementation;
     private String[] binNames = null;
     private boolean withNoBins = false;
@@ -71,6 +73,7 @@ public class QueryBuilder extends AbstractFilterableBuilder implements KeyBasedQ
     private int startPartition = 0;
     private int endPartition = 4096;
     private Txn txnToUse;
+    private int recordsPerSecond = 0;
     
     
     /**
@@ -322,6 +325,22 @@ public class QueryBuilder extends AbstractFilterableBuilder implements KeyBasedQ
     }
     
     /**
+     * Rate limit the records per second returned from the server. Note that this will force
+     * this to be a "long" query, allowing it to be tracked on the server.
+     *  
+     * @return this QueryBuilder for method chaining
+     */
+    public QueryBuilder recordsPerSecond(int recordsPerSecond) {
+        this.recordsPerSecond = recordsPerSecond;
+        return this;
+    }
+    
+    protected int getRecordsPerSecond() {
+        return this.recordsPerSecond;
+    }
+
+    
+    /**
      * Adds a filter condition using a DSL string.
      * 
      * <p>This method allows you to specify a filter condition using Aerospike's
@@ -570,4 +589,5 @@ public class QueryBuilder extends AbstractFilterableBuilder implements KeyBasedQ
     protected WhereClauseProcessor getDsl() {
         return this.dsl;
     }
+
 }

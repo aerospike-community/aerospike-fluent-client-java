@@ -3,16 +3,16 @@ package com.aerospike;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.aerospike.client.AerospikeException;
 import com.aerospike.client.IAerospikeClient;
 import com.aerospike.client.Key;
 import com.aerospike.client.Txn;
-import com.aerospike.client.cluster.Node;
 import com.aerospike.client.cluster.Partitions;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.exp.Expression;
 import com.aerospike.info.InfoCommands;
 import com.aerospike.policy.Behavior;
-import com.aerospike.query.BaseQueryBuilder;
+import com.aerospike.query.IndexBasedQueryBuilderInterface;
 import com.aerospike.query.KeyBasedQueryBuilderInterface;
 import com.aerospike.query.QueryBuilder;
 
@@ -82,7 +82,7 @@ public class Session {
     // --------------------------------------------
     // Query functionality
     // --------------------------------------------
-    public BaseQueryBuilder<QueryBuilder> query(DataSet dataSet) {
+    public IndexBasedQueryBuilderInterface<QueryBuilder> query(DataSet dataSet) {
         return new QueryBuilder(this, dataSet);
     }
 

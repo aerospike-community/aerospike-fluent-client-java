@@ -17,7 +17,6 @@ import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.SystemSettings;
 import com.aerospike.TypeSafeDataSet;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
@@ -443,6 +442,11 @@ public class QueryExamples {
             customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
             System.out.println(customers); 
 
+            // Records-per-second check
+            RecordStream queryResults = session.query(customerDataSet).recordsPerSecond(1).execute();
+            queryResults.forEach(rr -> System.out.println(rr.recordOrThrow()));
+            // session.query(customerDataSet.id(1)).recordsPerSecond(100).execute();
+            
             // Server-side chunking example - fetch records in chunks of 20
             customers = session.query(customerDataSet).chunkSize(20).execute().toObjectList(customerMapper);
             System.out.println(customers);
