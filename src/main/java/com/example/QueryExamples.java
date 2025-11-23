@@ -125,8 +125,9 @@ public class QueryExamples {
                     .values("Jane", 46)
                     .execute();
             
-            session.touch(customerDataSet.ids(1,2,3)).execute();
-            
+            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
+            session.delete(customerDataSet.ids(2)).durablyDelete(false).execute();
+            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
             
             DataSet users = DataSet.of("test", "users");
 
