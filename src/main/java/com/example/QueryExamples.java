@@ -23,6 +23,7 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.cdt.MapOrder;
+import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.task.ExecuteTask;
 import com.aerospike.dslobjects.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
@@ -421,6 +422,9 @@ public class QueryExamples {
             print(session.query(customerDataSet.ids(6,7,8)).readingOnlyBins("name", "age").execute());
             System.out.println("Read with select bins, set read");
             print(session.query(customerDataSet).readingOnlyBins("name", "age").execute());
+            
+//            session.update(customerDataSet.ids(1,2,3,4))
+//                    .bin
 
             // Throw an exception
             try {
@@ -431,14 +435,14 @@ public class QueryExamples {
             }
             
             // TODO: Put transaction control into policies
-//            session.doInTransaction(txnSession -> {
-//                Optional<KeyRecord> result = txnSession.query(customerDataSet.id(1)).execute().getFirst();
-//                if (true) {
-//                    txnSession.insert(customerDataSet.id(3));
-//                }
-//                txnSession.delete(customerDataSet.id(3));
-//                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
-//            });
+            session.doInTransaction(txnSession -> {
+                Optional<RecordResult> recResult = txnSession.query(customerDataSet.id(1)).execute().getFirst();
+                if (true) {
+                    txnSession.insert(customerDataSet.id(3));
+                }
+                txnSession.delete(customerDataSet.id(3));
+                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
+            });
             
             customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
             System.out.println(customers); 

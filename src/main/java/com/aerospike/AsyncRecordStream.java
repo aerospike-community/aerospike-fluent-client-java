@@ -45,28 +45,31 @@ public final class AsyncRecordStream implements AutoCloseable, Iterable<RecordRe
         return internalIterator;
     }
 
-    /** For producers: push a result if we are still open. Blocks when backpressure applies. */
-    public void publish(RecordResult result) {
+    /** 
+     * For producers: push a result if we are still open. Blocks when backpressure applies. 
+     * @param - the record to be pushed onto the stream. If {@code null} then the operation will be silently ignored
+     * @return - true if the stream is still open, false if the stream has been closed. If {@code false} is returned,
+     * the stream will never again accept a result, so any pending operations should be cancelled.
+     * */
+    public boolean publish(RecordResult result) {
         if (result == null) {
-			return;
+			return !cancelled.getAsBoolean();
 		}
-        if (cancelled.getAsBoolean())
-		 {
-			return; // best effort
+        if (cancelled.getAsBoolean()) {
+			return false;
 		}
         // Block with backpressure, but wake up promptly if closed/completed
         while (true) {
             if (cancelled.getAsBoolean()) {
-				return;
+				return false;
 			}
             try {
-                // TODO: Should this value be substantially larger?
                 if (queue.offer(result, 50, TimeUnit.MILLISECONDS)) {
-					return;
+					return true;
 				}
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                return;
+                return cancelled.getAsBoolean();
             }
         }
     }

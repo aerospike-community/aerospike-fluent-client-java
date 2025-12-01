@@ -237,6 +237,10 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
         return new NavigatableRecordStream(this, limit);
     }
     
+    /**
+     * Iterate through each record in the record stream, invoking the lambda on each one. This method will consume the stream. 
+     * @param consumer The lambda to invoke with the item being passed as the parameter
+     */
     public void forEach(Consumer<RecordResult> consumer) {
         while (hasNext()) {
             consumer.accept(next());
