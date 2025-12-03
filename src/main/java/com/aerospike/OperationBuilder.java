@@ -35,7 +35,7 @@ import com.aerospike.policy.Settings;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
-public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder> implements FilterableOperation<OperationBuilder> {
+public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder> implements FilterableOperation<OperationBuilder>, BinsValuesOperations {
     private final List<Key> keys;
     protected int generation = 0;
     protected long expirationInSecondsForAll = 0;
@@ -352,15 +352,23 @@ public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder>
         }
     }
     
-    protected int getNumKeys() {
+    @Override
+    public int getNumKeys() {
         return keys.size();
     }
     
-    protected boolean isMultiKey() {
+    @Override
+    public boolean isMultiKey() {
         return keys.size() > 1;
     }
     
-    protected int getExpirationAsInt(long expirationInSeconds) {
+    @Override
+    public OpType getOpType() {
+        return opType;
+    }
+    
+    @Override
+    public int getExpirationAsInt(long expirationInSeconds) {
         if (expirationInSeconds > Integer.MAX_VALUE) {
             return Integer.MAX_VALUE;
         }
@@ -384,7 +392,8 @@ public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder>
         return generation > 0 ? GenerationPolicy.EXPECT_GEN_EQUAL : GenerationPolicy.NONE;
     }
     
-    protected WritePolicy getWritePolicy(Settings settings, int generation, OpType opType) {
+    @Override
+    public WritePolicy getWritePolicy(Settings settings, int generation, OpType opType) {
         WritePolicy result = settings.asWritePolicy();
         result.generation = generation;
         result.generationPolicy = getGenerationPolicy(generation);
@@ -500,7 +509,8 @@ public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder>
         }
     }
     
-    protected Session getSession() {
+    @Override
+    public Session getSession() {
         return this.session;
     }
     
@@ -597,7 +607,8 @@ public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder>
         showWarningsOnException(ae, txn, key, expiration);
         throw ae;
     }
-    protected void showWarningsOnException(AerospikeException ae, Txn txn, Key key, int expiration) {
+    @Override
+    public void showWarningsOnException(AerospikeException ae, Txn txn, Key key, int expiration) {
         if (Log.warnEnabled()) {
             if (ae.getResultCode() == ResultCode.FAIL_FORBIDDEN && expiration > 0) {
                 Log.warn("Operation failed on server with FAIL_FORBIDDEN (22) and the record had "
@@ -616,7 +627,8 @@ public class OperationBuilder extends AbstractOperationBuilder<OperationBuilder>
      * Execute a single operation and publish the result to the async stream.
      * Handles filtering, error handling, and respondAllKeys logic.
      */
-    protected void executeAndPublishSingleOperation(
+    @Override
+    public void executeAndPublishSingleOperation(
             WritePolicy wp, 
             Key key, 
             Operation[] operations,
