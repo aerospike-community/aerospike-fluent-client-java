@@ -743,28 +743,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
         }
         
         // Execute and convert List<Boolean> to RecordStream
-        List<Boolean> results = builder.execute();
-        List<RecordResult> recordResults = new ArrayList<>();
-        
-        // Convert boolean result to RecordResult
-        if (results.isEmpty()) {
-            // No results - create empty stream
-            return new RecordStream(recordResults, 0);
-        }
-        
-        Boolean result = results.get(0);
-        // For EXISTS/DELETE/TOUCH, the boolean indicates success
-        // We need to represent this in RecordResult format
-        RecordResult recordResult;
-        if (result) {
-            recordResult = new RecordResult(key, new Record(null, 0, 0), 0);
-        }
-        else {
-            recordResult = new RecordResult(key, ResultCode.KEY_NOT_FOUND_ERROR, 
-                    false, ResultCode.getResultString(ResultCode.KEY_NOT_FOUND_ERROR), 0);
-        }
-        
-        return new RecordStream(recordResult);
+        return builder.execute();
     }
     
     // ========================================
