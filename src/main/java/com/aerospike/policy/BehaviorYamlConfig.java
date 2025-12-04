@@ -1,82 +1,45 @@
 package com.aerospike.policy;
 
 import java.time.Duration;
-import java.util.List;
+import java.util.Map;
 
 import com.aerospike.client.policy.ReadModeAP;
 import com.aerospike.client.policy.ReadModeSC;
 import com.aerospike.client.policy.Replica;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.datatype.jsr310.ser.DurationSerializer;
 
-class BehaviorYamlConfig {
+public class BehaviorYamlConfig {
     
-    @JsonProperty("behaviors")
-    private List<BehaviorConfig> behaviors;
-    
-    @JsonProperty("system")
-    private SystemConfig system;
+    private Map<String, BehaviorConfig> behaviors;
+    private Map<String, SystemSettingsConfig> system;
     
     // Getters and setters
-    public List<BehaviorConfig> getBehaviors() { return behaviors; }
-    public void setBehaviors(List<BehaviorConfig> behaviors) { this.behaviors = behaviors; }
+    public Map<String, BehaviorConfig> getBehaviors() { return behaviors; }
+    public void setBehaviors(Map<String, BehaviorConfig> behaviors) { this.behaviors = behaviors; }
     
-    public SystemConfig getSystem() { return system; }
-    public void setSystem(SystemConfig system) { this.system = system; }
+    public Map<String, SystemSettingsConfig> getSystem() { return system; }
+    public void setSystem(Map<String, SystemSettingsConfig> system) { this.system = system; }
     
-    // Individual behavior configuration
+    // Individual behavior configuration (name is the map key)
     public static class BehaviorConfig {
-        @JsonProperty("name")
-        private String name;
-        
-        @JsonProperty("parent")
         private String parent;
-        
-        @JsonProperty("sendKey")
         private Boolean sendKey;
-        
-        @JsonProperty("useCompression")
         private Boolean useCompression;
-        
-        @JsonProperty("allOperations")
         private PolicyConfig allOperations;
-        
-        @JsonProperty("readModeSC")
         private ConsistencyModeReadConfig readModeSC;
-        
-        @JsonProperty("readModeAP")
         private AvailabilityModeReadConfig readModeAP;
-        
-        @JsonProperty("retryableWrites")
         private WriteConfig retryableWrites;
-        
-        @JsonProperty("nonRetryableWrites")
         private WriteConfig nonRetryableWrites;
-        
-        @JsonProperty("batchReads")
         private BatchConfig batchReads;
-        
-        @JsonProperty("batchWrites")
         private BatchConfig batchWrites;
-        
-        @JsonProperty("query")
         private QueryConfig query;
-        
-        @JsonProperty("info")
         private InfoConfig info;
-        
-        @JsonProperty("systemTxnVerify")
         private SystemTxnVerifyConfig systemTxnVerify;
-        
-        @JsonProperty("systemTxnRoll")
         private SystemTxnRollConfig systemTxnRoll;
+        private SystemConnectionsConfig systemConnections;
+        private SystemCircuitBreakerConfig systemCircuitBreaker;
+        private SystemRefreshConfig systemRefresh;
         
         // Getters and setters
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
-        
         public String getParent() { return parent; }
         public void setParent(String parent) { this.parent = parent; }
         
@@ -118,48 +81,28 @@ class BehaviorYamlConfig {
         
         public SystemTxnRollConfig getSystemTxnRoll() { return systemTxnRoll; }
         public void setSystemTxnRoll(SystemTxnRollConfig systemTxnRoll) { this.systemTxnRoll = systemTxnRoll; }
+        
+        public SystemConnectionsConfig getSystemConnections() { return systemConnections; }
+        public void setSystemConnections(SystemConnectionsConfig systemConnections) { this.systemConnections = systemConnections; }
+        
+        public SystemCircuitBreakerConfig getSystemCircuitBreaker() { return systemCircuitBreaker; }
+        public void setSystemCircuitBreaker(SystemCircuitBreakerConfig systemCircuitBreaker) { this.systemCircuitBreaker = systemCircuitBreaker; }
+        
+        public SystemRefreshConfig getSystemRefresh() { return systemRefresh; }
+        public void setSystemRefresh(SystemRefreshConfig systemRefresh) { this.systemRefresh = systemRefresh; }
     }
     
     // Base policy configuration
     public static class PolicyConfig {
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("abandonCallAfter")
         private Duration abandonCallAfter;
-        
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("delayBetweenRetries")
         private Duration delayBetweenRetries;
-        
-        @JsonProperty("maximumNumberOfCallAttempts")
         private Integer maximumNumberOfCallAttempts;
-        
-        @JsonProperty("replicaOrder")
         private Replica replicaOrder;
-        
-        @JsonProperty("resetTtlOnReadAtPercent")
         private Integer resetTtlOnReadAtPercent;
-        
-        @JsonProperty("sendKey")
         private Boolean sendKey;
-        
-        @JsonProperty("useCompression")
         private Boolean useCompression;
-        
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("waitForCallToComplete")
         private Duration waitForCallToComplete;
-        
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("waitForConnectionToComplete")
         private Duration waitForConnectionToComplete;
-        
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("waitForSocketResponseAfterCallFails")
         private Duration waitForSocketResponseAfterCallFails;
         
         // Getters and setters
@@ -196,7 +139,6 @@ class BehaviorYamlConfig {
     
     // Consistency mode read configuration
     public static class ConsistencyModeReadConfig extends PolicyConfig {
-        @JsonProperty("readModeSC")
         private ReadModeSC readModeSC;
         
         public ReadModeSC getReadConsistency() { return readModeSC; }
@@ -205,7 +147,6 @@ class BehaviorYamlConfig {
     
     // Availability mode read configuration
     public static class AvailabilityModeReadConfig extends PolicyConfig {
-        @JsonProperty("readModeAP")
         private ReadModeAP readModeAP;
         
         public ReadModeAP getMigrationReadConsistency() { return readModeAP; }
@@ -214,7 +155,6 @@ class BehaviorYamlConfig {
     
     // Write configuration
     public static class WriteConfig extends PolicyConfig {
-        @JsonProperty("useDurableDelete")
         private Boolean useDurableDelete;
         
         public Boolean getUseDurableDelete() { return useDurableDelete; }
@@ -223,13 +163,8 @@ class BehaviorYamlConfig {
     
     // Batch configuration
     public static class BatchConfig extends PolicyConfig {
-        @JsonProperty("maxConcurrentServers")
         private Integer maxConcurrentServers;
-        
-        @JsonProperty("allowInlineMemoryAccess")
         private Boolean allowInlineMemoryAccess;
-        
-        @JsonProperty("allowInlineSsdAccess")
         private Boolean allowInlineSsdAccess;
         
         public Integer getMaxConcurrentServers() { return maxConcurrentServers; }
@@ -244,10 +179,7 @@ class BehaviorYamlConfig {
     
     // Query configuration
     public static class QueryConfig extends PolicyConfig {
-        @JsonProperty("recordQueueSize")
         private Integer recordQueueSize;
-        
-        @JsonProperty("maxConcurrentServers")
         private Integer maxConcurrentServers;
         
         public Integer getRecordQueueSize() { return recordQueueSize; }
@@ -264,7 +196,6 @@ class BehaviorYamlConfig {
     
     // System - Transaction Verify configuration (read-like settings)
     public static class SystemTxnVerifyConfig extends PolicyConfig {
-        @JsonProperty("consistency")
         private ReadModeSC consistency;
         
         public ReadModeSC getConsistency() { return consistency; }
@@ -277,118 +208,55 @@ class BehaviorYamlConfig {
         // replicaOrder, waitForCallToComplete, waitForConnectionToComplete, waitForSocketResponseAfterCallFails
     }
     
-    // -----------------------------------------------------------------------------------
-    // System Settings Configuration (for unified YAML)
-    // -----------------------------------------------------------------------------------
-    
-    /**
-     * Top-level system settings configuration containing default and cluster-specific settings.
-     */
-    public static class SystemConfig {
-        @JsonProperty("default")
-        private SystemSettingsConfig defaultSettings;
-        
-        @JsonProperty("clusters")
-        private java.util.Map<String, SystemSettingsConfig> clusters;
-        
-        public SystemSettingsConfig getDefaultSettings() { return defaultSettings; }
-        public void setDefaultSettings(SystemSettingsConfig defaultSettings) { 
-            this.defaultSettings = defaultSettings; 
-        }
-        
-        public java.util.Map<String, SystemSettingsConfig> getClusters() { return clusters; }
-        public void setClusters(java.util.Map<String, SystemSettingsConfig> clusters) { 
-            this.clusters = clusters; 
-        }
-    }
-    
-    /**
-     * System settings for a single cluster or default settings.
-     */
-    public static class SystemSettingsConfig {
-        @JsonProperty("connections")
-        private ConnectionsConfig connections;
-        
-        @JsonProperty("circuitBreaker")
-        private CircuitBreakerConfig circuitBreaker;
-        
-        @JsonProperty("refresh")
-        private RefreshConfig refresh;
-        
-        public ConnectionsConfig getConnections() { return connections; }
-        public void setConnections(ConnectionsConfig connections) { this.connections = connections; }
-        
-        public CircuitBreakerConfig getCircuitBreaker() { return circuitBreaker; }
-        public void setCircuitBreaker(CircuitBreakerConfig circuitBreaker) { this.circuitBreaker = circuitBreaker; }
-        
-        public RefreshConfig getRefresh() { return refresh; }
-        public void setRefresh(RefreshConfig refresh) { this.refresh = refresh; }
-    }
-    
-    /**
-     * Connection pool configuration.
-     */
-    public static class ConnectionsConfig {
-        @JsonProperty("minimumConnectionsPerNode")
+    // System - Connections configuration
+    public static class SystemConnectionsConfig {
         private Integer minimumConnectionsPerNode;
-        
-        @JsonProperty("maximumConnectionsPerNode")
         private Integer maximumConnectionsPerNode;
-        
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("maximumSocketIdleTime")
         private Duration maximumSocketIdleTime;
         
         public Integer getMinimumConnectionsPerNode() { return minimumConnectionsPerNode; }
-        public void setMinimumConnectionsPerNode(Integer minimumConnectionsPerNode) { 
-            this.minimumConnectionsPerNode = minimumConnectionsPerNode; 
-        }
+        public void setMinimumConnectionsPerNode(Integer minimumConnectionsPerNode) { this.minimumConnectionsPerNode = minimumConnectionsPerNode; }
         
         public Integer getMaximumConnectionsPerNode() { return maximumConnectionsPerNode; }
-        public void setMaximumConnectionsPerNode(Integer maximumConnectionsPerNode) { 
-            this.maximumConnectionsPerNode = maximumConnectionsPerNode; 
-        }
+        public void setMaximumConnectionsPerNode(Integer maximumConnectionsPerNode) { this.maximumConnectionsPerNode = maximumConnectionsPerNode; }
         
         public Duration getMaximumSocketIdleTime() { return maximumSocketIdleTime; }
-        public void setMaximumSocketIdleTime(Duration maximumSocketIdleTime) { 
-            this.maximumSocketIdleTime = maximumSocketIdleTime; 
-        }
+        public void setMaximumSocketIdleTime(Duration maximumSocketIdleTime) { this.maximumSocketIdleTime = maximumSocketIdleTime; }
     }
     
-    /**
-     * Circuit breaker configuration.
-     */
-    public static class CircuitBreakerConfig {
-        @JsonProperty("numTendIntervalsInErrorWindow")
+    // System - Circuit Breaker configuration
+    public static class SystemCircuitBreakerConfig {
         private Integer numTendIntervalsInErrorWindow;
-        
-        @JsonProperty("maximumErrorsInErrorWindow")
         private Integer maximumErrorsInErrorWindow;
         
         public Integer getNumTendIntervalsInErrorWindow() { return numTendIntervalsInErrorWindow; }
-        public void setNumTendIntervalsInErrorWindow(Integer numTendIntervalsInErrorWindow) { 
-            this.numTendIntervalsInErrorWindow = numTendIntervalsInErrorWindow; 
-        }
+        public void setNumTendIntervalsInErrorWindow(Integer numTendIntervalsInErrorWindow) { this.numTendIntervalsInErrorWindow = numTendIntervalsInErrorWindow; }
         
         public Integer getMaximumErrorsInErrorWindow() { return maximumErrorsInErrorWindow; }
-        public void setMaximumErrorsInErrorWindow(Integer maximumErrorsInErrorWindow) { 
-            this.maximumErrorsInErrorWindow = maximumErrorsInErrorWindow; 
-        }
+        public void setMaximumErrorsInErrorWindow(Integer maximumErrorsInErrorWindow) { this.maximumErrorsInErrorWindow = maximumErrorsInErrorWindow; }
     }
     
-    /**
-     * Cluster refresh configuration.
-     */
-    public static class RefreshConfig {
-        @JsonDeserialize(using = DurationDeserializer.class)
-        @JsonSerialize(using = DurationSerializer.class)
-        @JsonProperty("tendInterval")
+    // System - Refresh configuration
+    public static class SystemRefreshConfig {
         private Duration tendInterval;
         
         public Duration getTendInterval() { return tendInterval; }
-        public void setTendInterval(Duration tendInterval) { 
-            this.tendInterval = tendInterval; 
-        }
+        public void setTendInterval(Duration tendInterval) { this.tendInterval = tendInterval; }
+    }
+    
+    // System settings configuration (for cluster-level settings)
+    public static class SystemSettingsConfig {
+        private SystemConnectionsConfig connections;
+        private SystemCircuitBreakerConfig circuitBreaker;
+        private SystemRefreshConfig refresh;
+        
+        public SystemConnectionsConfig getConnections() { return connections; }
+        public void setConnections(SystemConnectionsConfig connections) { this.connections = connections; }
+        
+        public SystemCircuitBreakerConfig getCircuitBreaker() { return circuitBreaker; }
+        public void setCircuitBreaker(SystemCircuitBreakerConfig circuitBreaker) { this.circuitBreaker = circuitBreaker; }
+        
+        public SystemRefreshConfig getRefresh() { return refresh; }
+        public void setRefresh(SystemRefreshConfig refresh) { this.refresh = refresh; }
     }
 } 

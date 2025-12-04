@@ -1,26 +1,86 @@
 package com.aerospike.policy;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
+import org.yaml.snakeyaml.introspector.Property;
+import org.yaml.snakeyaml.introspector.PropertyUtils;
+import org.yaml.snakeyaml.nodes.Node;
+import org.yaml.snakeyaml.nodes.ScalarNode;
+import org.yaml.snakeyaml.nodes.Tag;
+
 import com.aerospike.SystemSettings;
 import com.aerospike.SystemSettingsRegistry;
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-class BehaviorYamlLoader {
+public class BehaviorYamlLoader {
     
-    private static final ObjectMapper objectMapper;
+    private static final Yaml yaml;
     
     static {
-        objectMapper = new ObjectMapper(new YAMLFactory());
-        objectMapper.registerModule(new JavaTimeModule());
+        LoaderOptions loaderOptions = new LoaderOptions();
+        CustomConstructor constructor = new CustomConstructor(BehaviorYamlConfig.class, loaderOptions);
+        yaml = new Yaml(constructor);
+    }
+    
+    /**
+     * Custom SnakeYAML constructor that handles Duration parsing and property name mapping
+     */
+    private static class CustomConstructor extends Constructor {
+        
+        public CustomConstructor(Class<?> theRoot, LoaderOptions loadingConfig) {
+            super(theRoot, loadingConfig);
+            
+            // Register Duration constructor
+            this.yamlConstructors.put(new Tag(Duration.class), new DurationConstruct());
+            
+            // Use custom property utils to skip missing properties
+            PropertyUtils propertyUtils = new PropertyUtils() {
+                @Override
+                public Property getProperty(Class<?> type, String name) {
+                    try {
+                        return super.getProperty(type, name);
+                    } catch (Exception e) {
+                        // If property not found, skip it
+                        return null;
+                    }
+                }
+            };
+            propertyUtils.setSkipMissingProperties(true);
+            this.setPropertyUtils(propertyUtils);
+        }
+        
+        @Override
+        protected Object constructObject(Node node) {
+            if (node instanceof ScalarNode) {
+                ScalarNode scalarNode = (ScalarNode) node;
+                String value = scalarNode.getValue();
+                
+                // Try to detect if this is a Duration value based on format
+                if (isDurationValue(value)) {
+                    return DurationConstruct.parseDuration(value);
+                }
+            }
+            return super.constructObject(node);
+        }
+        
+        private boolean isDurationValue(String value) {
+            if (value == null || value.isEmpty()) {
+                return false;
+            }
+            // Check if it looks like a duration (number followed by time unit or ISO-8601)
+            return value.matches("^\\d+\\s*[a-zA-Z]+$") || value.startsWith("PT") || value.startsWith("P");
+        }
     }
     
     /**
@@ -28,12 +88,10 @@ class BehaviorYamlLoader {
      * 
      * @param file The YAML file to load
      * @return A new Behavior instance created from the YAML configuration
-     * @throws JsonParseException if the YAML is malformed
-     * @throws JsonMappingException if the YAML structure doesn't match the expected format
-     * @throws IOException if there's an error reading the file
+     * @throws IOException if there's an error reading or parsing the file
      */
-    public static Behavior loadFromFile(File file) throws JsonParseException, JsonMappingException, IOException {
-        BehaviorYamlConfig config = objectMapper.readValue(file, BehaviorYamlConfig.class);
+    public static Behavior loadFromFile(File file) throws IOException {
+        BehaviorYamlConfig config = loadYamlConfig(file);
         Map<String, Behavior> behaviors = convertToBehaviors(config);
         // Return the first behavior or DEFAULT if none found
         return behaviors.isEmpty() ? Behavior.DEFAULT : behaviors.values().iterator().next();
@@ -44,13 +102,46 @@ class BehaviorYamlLoader {
      * 
      * @param file The YAML file to load
      * @return Map of behavior names to behaviors
-     * @throws JsonParseException if the YAML is malformed
-     * @throws JsonMappingException if the YAML structure doesn't match the expected format
-     * @throws IOException if there's an error reading the file
+     * @throws IOException if there's an error reading or parsing the file
      */
-    public static Map<String, Behavior> loadBehaviorsFromFile(File file) throws JsonParseException, JsonMappingException, IOException {
-        BehaviorYamlConfig config = objectMapper.readValue(file, BehaviorYamlConfig.class);
+    public static Map<String, Behavior> loadBehaviorsFromFile(File file) throws IOException {
+        BehaviorYamlConfig config = loadYamlConfig(file);
         return updateBehaviorsFromConfig(config);
+    }
+    
+    /**
+     * TODO: we might not want this methods for the public API
+     * Load behaviors from a YAML string and register them in the tree structure
+     * 
+     * @param yamlString The YAML string to load
+     * @return Map of behavior names to behaviors
+     * @throws IOException if there's an error parsing the YAML
+     */
+    public static Map<String, Behavior> loadBehaviorsFromString(String yamlString) throws IOException {
+        BehaviorYamlConfig config = loadYamlConfigFromString(yamlString);
+        return updateBehaviorsFromConfig(config);
+    }
+    
+    /**
+     * Load YAML configuration from file using SnakeYAML
+     */
+    private static BehaviorYamlConfig loadYamlConfig(File file) throws IOException {
+        try (InputStream inputStream = new FileInputStream(file)) {
+            return yaml.load(inputStream);
+        } catch (Exception e) {
+            throw new IOException("Failed to parse YAML file: " + file, e);
+        }
+    }
+    
+    /**
+     * Load YAML configuration from string using SnakeYAML
+     */
+    private static BehaviorYamlConfig loadYamlConfigFromString(String yamlString) throws IOException {
+        try (InputStream inputStream = new ByteArrayInputStream(yamlString.getBytes(StandardCharsets.UTF_8))) {
+            return yaml.load(inputStream);
+        } catch (Exception e) {
+            throw new IOException("Failed to parse YAML string", e);
+        }
     }
     
     /**
@@ -64,29 +155,28 @@ class BehaviorYamlLoader {
         Map<String, Behavior> updatedBehaviors = new HashMap<>();
         
         if (config.getBehaviors() != null) {
-            for (BehaviorYamlConfig.BehaviorConfig behaviorConfig : config.getBehaviors()) {
-                String behaviorName = behaviorConfig.getName();
+            for (Map.Entry<String, BehaviorYamlConfig.BehaviorConfig> entry : config.getBehaviors().entrySet()) {
+                String behaviorName = entry.getKey();
+                BehaviorYamlConfig.BehaviorConfig behaviorConfig = entry.getValue();
                 
                 // Check if behavior already exists
                 Optional<Behavior> existingBehavior = registry.getBehavior(behaviorName);
                 
                 if (existingBehavior.isPresent()) {
                     // Update existing behavior
-                    Behavior updatedBehavior = updateExistingBehavior(existingBehavior.get(), behaviorConfig);
+                    Behavior updatedBehavior = updateExistingBehavior(existingBehavior.get(), behaviorName, behaviorConfig);
                     updatedBehaviors.put(behaviorName, updatedBehavior);
                 } else {
                     // Create new behavior
-                    Behavior newBehavior = createNewBehavior(behaviorConfig);
+                    Behavior newBehavior = createNewBehavior(behaviorName, behaviorConfig);
                     updatedBehaviors.put(behaviorName, newBehavior);
                     registry.registerBehavior(newBehavior);
                 }
             }
         }
         
-        // Load system settings from the same configuration
-        if (config.getSystem() != null) {
-            loadSystemSettings(config.getSystem());
-        }
+        // Load system settings
+        loadSystemSettings(config);
         
         return updatedBehaviors;
     }
@@ -95,13 +185,14 @@ class BehaviorYamlLoader {
      * Update an existing behavior with new configuration
      * 
      * @param existingBehavior The existing behavior to update
+     * @param name The behavior name (from the map key)
      * @param config The new configuration
      * @return The updated behavior (new instance with same name)
      */
-    private static Behavior updateExistingBehavior(Behavior existingBehavior, BehaviorYamlConfig.BehaviorConfig config) {
+    private static Behavior updateExistingBehavior(Behavior existingBehavior, String name, BehaviorYamlConfig.BehaviorConfig config) {
         // Create a new behavior with the updated configuration
         // Note: This creates a new instance rather than modifying the existing one
-        Behavior updatedBehavior = createNewBehavior(config);
+        Behavior updatedBehavior = createNewBehavior(name, config);
         
         // Update the registry to point to the new behavior
         BehaviorRegistry.getInstance().registerBehavior(updatedBehavior);
@@ -112,12 +203,11 @@ class BehaviorYamlLoader {
     /**
      * Create a new behavior from configuration using the new selector-based API
      * 
+     * @param name The behavior name (from the map key)
      * @param config The behavior configuration
      * @return A new Behavior instance
      */
-    private static Behavior createNewBehavior(BehaviorYamlConfig.BehaviorConfig config) {
-        String name = config.getName() != null ? config.getName() : "yaml-loaded";
-        
+    private static Behavior createNewBehavior(String name, BehaviorYamlConfig.BehaviorConfig config) {
         // Determine parent behavior
         Behavior parent = Behavior.DEFAULT;
         if (config.getParent() != null && !"default".equalsIgnoreCase(config.getParent())) {
@@ -147,11 +237,16 @@ class BehaviorYamlLoader {
         
         // Create all behaviors (parent relationships are handled in createNewBehavior)
         if (config.getBehaviors() != null) {
-            for (BehaviorYamlConfig.BehaviorConfig behaviorConfig : config.getBehaviors()) {
-                Behavior behavior = createNewBehavior(behaviorConfig);
-                behaviors.put(behavior.name(), behavior);
+            for (Map.Entry<String, BehaviorYamlConfig.BehaviorConfig> entry : config.getBehaviors().entrySet()) {
+                String name = entry.getKey();
+                BehaviorYamlConfig.BehaviorConfig behaviorConfig = entry.getValue();
+                Behavior behavior = createNewBehavior(name, behaviorConfig);
+                behaviors.put(name, behavior);
             }
         }
+        
+        // Load system settings
+        loadSystemSettings(config);
         
         return behaviors;
     }
@@ -167,6 +262,10 @@ class BehaviorYamlLoader {
         if (config.getAllOperations() != null) {
             builder.on(Behavior.Selectors.all(), ops -> {
                 applyCommonConfig(ops, config.getAllOperations());
+                // Apply read-specific properties if present
+                if (config.getAllOperations().getResetTtlOnReadAtPercent() != null) {
+                    ops.resetTtlOnReadAtPercent(config.getAllOperations().getResetTtlOnReadAtPercent());
+                }
             });
         }
         
@@ -309,43 +408,44 @@ class BehaviorYamlLoader {
     }
     
     /**
-     * Load system settings from YAML configuration and update the registry.
+     * Load system settings from YAML configuration and register them in the registry.
      * 
-     * @param systemConfig The system configuration from YAML
+     * @param config The YAML configuration containing system settings
      */
-    private static void loadSystemSettings(BehaviorYamlConfig.SystemConfig systemConfig) {
-        SystemSettingsRegistry registry = SystemSettingsRegistry.getInstance();
-        
-        // Load default settings
-        if (systemConfig.getDefaultSettings() != null) {
-            SystemSettings defaultSettings = convertToSystemSettings(systemConfig.getDefaultSettings());
-            registry.updateDefaultSettings(defaultSettings);
+    private static void loadSystemSettings(BehaviorYamlConfig config) {
+        if (config.getSystem() == null) {
+            return;
         }
         
-        // Load cluster-specific settings
-        if (systemConfig.getClusters() != null) {
-            for (Map.Entry<String, BehaviorYamlConfig.SystemSettingsConfig> entry : 
-                 systemConfig.getClusters().entrySet()) {
-                SystemSettings clusterSettings = convertToSystemSettings(entry.getValue());
-                registry.updateClusterSettings(entry.getKey(), clusterSettings);
+        SystemSettingsRegistry registry = SystemSettingsRegistry.getInstance();
+        
+        for (Map.Entry<String, BehaviorYamlConfig.SystemSettingsConfig> entry : config.getSystem().entrySet()) {
+            String name = entry.getKey();
+            BehaviorYamlConfig.SystemSettingsConfig settingsConfig = entry.getValue();
+            SystemSettings settings = convertToSystemSettings(settingsConfig);
+            
+            if ("DEFAULT".equalsIgnoreCase(name)) {
+                // Update default settings
+                registry.updateDefaultSettings(settings);
+            } else {
+                // Update cluster-specific settings
+                registry.updateClusterSettings(name, settings);
             }
         }
     }
     
     /**
-     * Convert YAML SystemSettingsConfig to SystemSettings instance using lambda API.
+     * Convert a SystemSettingsConfig from YAML to a SystemSettings instance.
      * 
      * @param config The system settings configuration from YAML
      * @return A SystemSettings instance
      */
-    private static SystemSettings convertToSystemSettings(
-            BehaviorYamlConfig.SystemSettingsConfig config) {
-        
+    private static SystemSettings convertToSystemSettings(BehaviorYamlConfig.SystemSettingsConfig config) {
         SystemSettings.Builder builder = SystemSettings.builder();
         
-        // Connections settings
+        // Apply connections settings
         if (config.getConnections() != null) {
-            BehaviorYamlConfig.ConnectionsConfig connConfig = config.getConnections();
+            BehaviorYamlConfig.SystemConnectionsConfig connConfig = config.getConnections();
             builder.connections(ops -> {
                 if (connConfig.getMinimumConnectionsPerNode() != null) {
                     ops.minimumConnectionsPerNode(connConfig.getMinimumConnectionsPerNode());
@@ -359,9 +459,9 @@ class BehaviorYamlLoader {
             });
         }
         
-        // Circuit breaker settings
+        // Apply circuit breaker settings
         if (config.getCircuitBreaker() != null) {
-            BehaviorYamlConfig.CircuitBreakerConfig cbConfig = config.getCircuitBreaker();
+            BehaviorYamlConfig.SystemCircuitBreakerConfig cbConfig = config.getCircuitBreaker();
             builder.circuitBreaker(ops -> {
                 if (cbConfig.getNumTendIntervalsInErrorWindow() != null) {
                     ops.numTendIntervalsInErrorWindow(cbConfig.getNumTendIntervalsInErrorWindow());
@@ -372,9 +472,9 @@ class BehaviorYamlLoader {
             });
         }
         
-        // Refresh settings
+        // Apply refresh settings
         if (config.getRefresh() != null) {
-            BehaviorYamlConfig.RefreshConfig refreshConfig = config.getRefresh();
+            BehaviorYamlConfig.SystemRefreshConfig refreshConfig = config.getRefresh();
             builder.refresh(ops -> {
                 if (refreshConfig.getTendInterval() != null) {
                     ops.tendInterval(refreshConfig.getTendInterval());
