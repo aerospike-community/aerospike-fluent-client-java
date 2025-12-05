@@ -174,8 +174,12 @@ public class SystemSettings {
     
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+			return true;
+		}
+        if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
         SystemSettings that = (SystemSettings) o;
         return Objects.equals(minimumConnectionsPerNode, that.minimumConnectionsPerNode) &&
                Objects.equals(maximumConnectionsPerNode, that.maximumConnectionsPerNode) &&

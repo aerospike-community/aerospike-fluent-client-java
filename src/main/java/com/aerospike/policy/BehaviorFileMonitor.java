@@ -217,7 +217,7 @@ class BehaviorFileMonitor implements Closeable {
             Log.info("Updated " + updatedBehaviors.size() + " behaviors from: " + yamlFilePath);
             
         } catch (IOException e) {
-            System.err.println("Error reading YAML file: " + e.getMessage());
+            System.err.println("Error reading or parsing YAML file: " + e.getMessage());
         } catch (Exception e) {
             System.err.println("Unexpected error loading behaviors: " + e.getMessage());
             e.printStackTrace();
