@@ -83,7 +83,7 @@ ClusterDefinition → Cluster (Connection Pool)
                         ↓
                     Execute → RecordStream
                         ↓
-                    Results (KeyRecord or Objects)
+                    Results (RecordResult or Objects)
 ```
 
 ### The Flow
@@ -109,7 +109,7 @@ import com.aerospike.Session;
 import com.aerospike.DataSet;
 import com.aerospike.TypeSafeDataSet;
 import com.aerospike.RecordStream;
-import com.aerospike.KeyRecord;
+import com.aerospike.RecordResult;
 import com.aerospike.policy.Behavior;
 import com.aerospike.RecordMapper;
 ```
@@ -247,8 +247,8 @@ Key key = users.id("alice");
 // Read
 RecordStream result = session.query(key).execute();
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    int currentAge = record.record.getInt("age");
+    RecordResult record = result.next();
+    int currentAge = record.recordOrThrow().getInt("age");
     
     // Modify
     int newAge = currentAge + 1;
@@ -278,7 +278,7 @@ RecordStream results = session.query(users)
     .execute();
 
 results.forEach(record -> {
-    System.out.println(record.record.getString("name"));
+    System.out.println(record.recordOrThrow().getString("name"));
 });
 ```
 

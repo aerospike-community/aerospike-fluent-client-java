@@ -121,20 +121,20 @@ if (record != null) {
 **Fluent:**
 ```java
 import com.aerospike.RecordStream;
-import com.aerospike.KeyRecord;
+import com.aerospike.RecordResult;
 
 RecordStream results = session.query(users.id("user123")).execute();
 
 if (results.hasNext()) {
-    KeyRecord keyRecord = results.next();
-    String name = keyRecord.record.getString("name");
-    int age = keyRecord.record.getInt("age");
+    RecordResult record = results.next();
+    String name = record.recordOrThrow().getString("name");
+    int age = record.recordOrThrow().getInt("age");
 }
 
 // Or, using Optional for a more modern Java style:
-Optional<KeyRecord> resultOpt = session.query(users.id("user123")).execute().getFirst();
+Optional<RecordResult> resultOpt = session.query(users.id("user123")).execute().getFirst();
 resultOpt.ifPresent(keyRecord -> {
-    String name = keyRecord.record.getString("name");
+    String name = record.recordOrThrow().getString("name");
     // ...
 });
 ```

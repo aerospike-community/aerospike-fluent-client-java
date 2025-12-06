@@ -124,9 +124,9 @@ Use `ensureGenerationIs()` to prevent overwriting concurrent changes (the "lost 
 RecordStream result = session.query(userKey).execute();
 
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    int currentGeneration = record.record.generation;
-    int currentBalance = record.record.getInt("balance");
+    RecordResult record = result.next();
+    int currentGeneration = record.recordOrThrow().generation;
+    int currentBalance = record.recordOrThrow().getInt("balance");
 
     // 2. Perform update, providing the generation number
     try {
@@ -267,7 +267,7 @@ session.update(userKey)
 session.update(key).bin("views").add(1).execute();
 
 // ❌ Bad: Prone to race conditions
-int views = session.query(key).execute().getFirst().get().record.getInt("views");
+int views = session.query(key).execute().getFirst().get().recordOrThrow().getInt("views");
 session.update(key).bin("views").setTo(views + 1).execute();
 ```
 

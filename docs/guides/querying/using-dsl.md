@@ -278,7 +278,7 @@ public class UserSearchService {
             .collect(Collectors.toList());
     }
     
-    private User mapToUser(KeyRecord kr) {
+    private User mapToUser(RecordResult kr) {
         // Mapping logic...
         return new User(...);
     }

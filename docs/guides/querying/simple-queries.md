@@ -47,7 +47,7 @@ DataSet users = DataSet.of("test", "users");
 RecordStream allUsers = session.query(users).execute();
 
 allUsers.forEach(record -> {
-    System.out.println("User: " + record.record.getString("name"));
+    System.out.println("User: " + record.recordOrThrow().getString("name"));
 });
 ```
 
@@ -101,7 +101,7 @@ RecordStream results = session.query(users)
     .execute();
 
 results.forEach(record -> {
-    System.out.println(record.record.getString("name") + " is 30.");
+    System.out.println(record.recordOrThrow().getString("name") + " is 30.");
 });
 ```
 
@@ -141,7 +141,7 @@ RecordStream results = session.query(users).where("$.active == true").execute();
 
 // Using a while loop
 while (results.hasNext()) {
-    KeyRecord record = results.next();
+    RecordResult record = results.next();
     // Process record...
 }
 
@@ -152,7 +152,7 @@ results.forEach(record -> {
 
 // Using Java Stream API
 long count = results.stream()
-    .filter(kr -> kr.record.getInt("loginCount") > 10)
+    .filter(kr -> kr.recordOrThrow().getInt("loginCount") > 10)
     .count();
 ```
 
@@ -205,7 +205,7 @@ public class ProductSearch {
             .collect(Collectors.toList());
     }
     
-    private Product mapToProduct(KeyRecord kr) {
+    private Product mapToProduct(RecordResult kr) {
         // Mapping logic...
         return new Product(...);
     }

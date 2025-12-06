@@ -95,7 +95,7 @@ session.truncate(DataSet.of("test", "users"));                    // Delete all 
 // Read current value
 RecordStream result = session.query(key).execute();
 if (result.hasNext()) {
-    int currentValue = result.next().record.getInt("counter");
+    int currentValue = result.next().recordOrThrow().getInt("counter");
     
     // Update
     session.update(key).bin("counter").setTo(currentValue + 1).execute();

@@ -100,7 +100,7 @@ public class SessionManager {
         RecordStream result = session.query(sessions.id(sessionId)).execute();
         
         if (result.hasNext()) {
-            KeyRecord record = result.next();
+            RecordResult record = result.next();
             
             // Update last accessed time
             session.update(sessions.id(sessionId))
@@ -108,7 +108,7 @@ public class SessionManager {
                 .withNoChangeInExpiration()
                 .execute();
             
-            return Optional.of((Map<String, Object>) record.record.getValue("data"));
+            return Optional.of((Map<String, Object>) record.recordOrThrow().getValue("data"));
         }
         
         return Optional.empty();
@@ -124,8 +124,8 @@ public class SessionManager {
             .execute();
         
         while (userSessions.hasNext()) {
-            KeyRecord record = userSessions.next();
-            session.delete(record.key).execute();
+            RecordResult record = userSessions.next();
+            session.delete(record.key()).execute();
         }
     }
 }
@@ -172,10 +172,10 @@ public class AnalyticsDashboard {
             .execute();
         
         while (records.hasNext()) {
-            KeyRecord record = records.next();
-            String key = (String) record.key.userKey.getObject();
+            RecordResult record = records.next();
+            String key = (String) record.key().userKey.getObject();
             if (key.endsWith(date)) {
-                Long views = record.record.getLong("views");
+                Long views = record.recordOrThrow().getLong("views");
                 String pageId = key.split(":")[1];
                 results.put(pageId, views);
             }
@@ -208,7 +208,7 @@ public class AtomicCounter {
     public static long get(Session session, DataSet dataSet, String counterId) {
         RecordStream result = session.query(dataSet.id(counterId)).execute();
         if (result.hasNext()) {
-            return result.next().record.getLong("value");
+            return result.next().recordOrThrow().getLong("value");
         }
         return 0;
     }
@@ -249,8 +249,8 @@ public class DistributedLock {
     public void releaseLock(String lockName, String ownerId) {
         RecordStream result = session.query(locks.id(lockName)).execute();
         if (result.hasNext()) {
-            KeyRecord record = result.next();
-            String owner = record.record.getString("owner");
+            RecordResult record = result.next();
+            String owner = record.recordOrThrow().getString("owner");
             if (ownerId.equals(owner)) {
                 session.delete(locks.id(lockName)).execute();
             }
@@ -295,9 +295,9 @@ public class TimeSeriesWriter {
             .execute();
         
         while (records.hasNext()) {
-            KeyRecord record = records.next();
+            RecordResult record = records.next();
             List<Map<String, Object>> values = 
-                (List<Map<String, Object>>) record.record.getValue("values");
+                (List<Map<String, Object>>) record.recordOrThrow().getValue("values");
             results.addAll(values);
         }
         
@@ -526,7 +526,7 @@ public class IntegrationTest {
         // Read
         RecordStream result = session.query(test.id("test-key")).execute();
         assertTrue(result.hasNext());
-        assertEquals(123, result.next().record.getInt("value"));
+        assertEquals(123, result.next().recordOrThrow().getInt("value"));
     }
 }
 ```

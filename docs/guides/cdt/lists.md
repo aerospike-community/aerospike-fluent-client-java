@@ -91,8 +91,8 @@ RecordStream result = session.query(products.id("product123"))
     .execute();
 
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    Long size = record.record.getLong("tags");
+    RecordResult record = result.next();
+    Long size = record.recordOrThrow().getLong("tags");
     System.out.println("Number of tags: " + size);
 }
 ```
@@ -372,8 +372,8 @@ public class TagManager {
             .execute();
             
         if (result.hasNext()) {
-            KeyRecord record = result.next();
-            return (List<String>) record.record.getList("tags");
+            RecordResult record = result.next();
+            return (List<String>) record.recordOrThrow().getList("tags");
         }
         return List.of();
     }
@@ -526,7 +526,7 @@ public class ProductTagging {
             .execute();
             
         if (result.hasNext()) {
-            return (List<String>) result.next().record.getList("tags");
+            return (List<String>) result.next().recordOrThrow().getList("tags");
         }
         return List.of();
     }

@@ -99,9 +99,9 @@ RecordStream result = session.query(users.id("alice"))
     .execute();
 
 if (result.hasNext()) {
-    KeyRecord kr = result.next();
-    String name = kr.record.getString("name");
-    int age = kr.record.getInt("age");
+    RecordResult kr = result.next();
+    String name = kr.recordOrThrow().getString("name");
+    int age = kr.recordOrThrow().getInt("age");
 }
 ```
 
@@ -324,12 +324,12 @@ public class UserService implements AutoCloseable {
             return null;
         }
         
-        KeyRecord kr = result.next();
+        RecordResult kr = result.next();
         return new User(
             id,
-            kr.record.getString("name"),
-            kr.record.getInt("age"),
-            kr.record.getLong("created")
+            kr.recordOrThrow().getString("name"),
+            kr.recordOrThrow().getInt("age"),
+            kr.recordOrThrow().getLong("created")
         );
     }
     

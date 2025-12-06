@@ -54,8 +54,8 @@ long amountToTransfer = 100L;
 try {
     txSession.doInTransactionReturning(tx -> {
         // Read the current balance from both accounts
-        long fromBalance = tx.query(accounts.id("acc1")).execute().getFirst().get().record.getLong("balance");
-        long toBalance = tx.query(accounts.id("acc2")).execute().getFirst().get().record.getLong("balance");
+        long fromBalance = tx.query(accounts.id("acc1")).execute().getFirst().get().recordOrThrow().getLong("balance");
+        long toBalance = tx.query(accounts.id("acc2")).execute().getFirst().get().recordOrThrow().getLong("balance");
 
         // Check for sufficient funds
         if (fromBalance < amountToTransfer) {

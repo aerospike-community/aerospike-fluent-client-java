@@ -36,7 +36,7 @@ RecordStream results = session.query(users)
     .execute();
 
 results.forEach(record -> {
-    System.out.println(record.record.getString("name") + " is " + record.record.getInt("age"));
+    System.out.println(record.recordOrThrow().getString("name") + " is " + record.recordOrThrow().getInt("age"));
 });
 ```
 
@@ -113,7 +113,7 @@ while (results.hasMorePages()) {
     
     // Process the records on the current page
     while(results.hasNext()) {
-        KeyRecord keyRecord = results.next();
+        RecordResult record = results.next();
         // process record...
     }
     

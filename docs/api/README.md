@@ -17,8 +17,8 @@ This section provides a detailed reference for the core classes and interfaces i
 - **[QueryBuilder](./query-builder.md)**: The fluent builder for constructing read, scan, and query operations.
 
 ### Results and Streaming
-- **[RecordStream](./record-stream.md)**: A forward-only iterator for processing results from scans and queries.
-- **[KeyRecord](./key-record.md)**: A container for a `Key` and its corresponding `Record` returned by a query.
+- **[RecordStream](./operations/record-stream.md)**: A forward-only iterator for processing results from scans and queries.
+- **[RecordResult](./record-result.md)**: A container for a `Key`, `Record`, and result status returned by a query.
 
 ### Object Mapping
 - **[RecordMapper](./record-mapper.md)**: The interface for mapping Java objects to and from Aerospike records.

@@ -257,8 +257,8 @@ session.update(key)
 // Optimistic locking
 RecordStream result = session.query(key).execute();
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    int generation = record.record.generation;
+    RecordResult record = result.next();
+    int generation = record.recordOrThrow().generation;
     
     // Only update if generation hasn't changed
     session.update(key)

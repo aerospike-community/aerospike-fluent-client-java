@@ -86,57 +86,66 @@ See the `DURATION_FORMATS.md` file for a full list of supported units.
 
 ## Loading Behaviors from YAML
 
-The `Cluster` object is responsible for loading and managing behaviors from files.
+The `Behavior` class provides static methods for loading and monitoring YAML configuration files.
 
 ### 1. One-Time Load at Startup
 
-Use `loadBehaviors()` to load the file once when your application starts.
+Use `BehaviorYamlLoader.loadBehaviorsFromFile()` to load the file once when your application starts.
 
 ```java
-import com.aerospike.BehaviorMonitor;
+import com.aerospike.policy.BehaviorYamlLoader;
+import com.aerospike.policy.Behavior;
 import java.io.File;
 
 // ... in your application startup
 File configFile = new File("config/aerospike-behaviors.yaml");
-cluster.loadBehaviors(configFile);
+BehaviorYamlLoader.loadBehaviorsFromFile(configFile);
 
 // Now you can get the loaded behaviors by name
-Optional<Behavior> readOnlyBehavior = cluster.getBehavior("read-only-api");
+Behavior readOnlyBehavior = Behavior.getBehavior("read-only-api");
 
-readOnlyBehavior.ifPresent(behavior -> {
-    Session readSession = cluster.createSession(behavior);
-    // Use the session...
-});
+Session readSession = cluster.createSession(readOnlyBehavior);
+// Use the session...
 ```
 If the file is not found or is invalid, this method will throw an exception.
 
 ### 2. Dynamic Monitoring and Reloading
 
-Use `monitorBehaviors()` to have the client watch the file for changes and automatically reload the behaviors when the file is saved.
+Use `Behavior.startMonitoring()` to have the client watch the file for changes and automatically reload the behaviors when the file is saved. This method also performs the initial load, so you don't need to call `loadBehaviorsFromFile()` separately.
 
 ```java
-import com.aerospike.BehaviorMonitor;
-import java.io.File;
+import com.aerospike.policy.Behavior;
 
-File configFile = new File("config/aerospike-behaviors.yaml");
+String configPath = "config/aerospike-behaviors.yaml";
 
-// Start monitoring the file.
-// The returned BehaviorMonitor can be used to stop monitoring.
-BehaviorMonitor monitor = cluster.monitorBehaviors(configFile);
+// Start monitoring the file. This also loads the behaviors immediately.
+Behavior.startMonitoring(configPath);
 
-// You can now get behaviors by name. The cluster will always return
-// the most recently loaded version.
-Optional<Behavior> criticalBehavior = cluster.getBehavior("critical-write-api");
+// You can now get behaviors by name. Behavior.getBehavior() will always
+// return the most recently loaded version.
+Behavior criticalBehavior = Behavior.getBehavior("critical-write-api");
 
 // Later, in your application shutdown hook:
-// monitor.stop();
+Behavior.stopMonitoring();
+```
+
+For use with try-with-resources:
+
+```java
+import com.aerospike.policy.Behavior;
+import java.io.Closeable;
+
+try (Closeable monitor = Behavior.startMonitoringWithResource("config/aerospike-behaviors.yaml")) {
+    Cluster cluster = new ClusterDefinition("localhost", 3000).connect();
+    // ... use cluster with dynamically reloadable behaviors
+} // Monitor automatically stopped when exiting the block
 ```
 
 **How it works**:
 1. You edit and save the `aerospike-behaviors.yaml` file.
-2. The `BehaviorMonitor` detects the change.
+2. The file monitor detects the change.
 3. It re-reads the file and replaces the in-memory `Behavior` definitions.
-4. Any subsequent call to `cluster.getBehavior("behavior-name")` will return the new, updated behavior.
+4. Any subsequent call to `Behavior.getBehavior("behavior-name")` will return the new, updated behavior.
 
 > **Important**: `Session` objects are created with a specific `Behavior` instance. They will **not** be updated automatically. To use the new policies, you must create a **new** `Session` after the file has been reloaded.
 
@@ -163,7 +172,7 @@ behaviors:
 ### `UserService.java`
 
 ```java
-import java.util.Optional;
+import com.aerospike.policy.Behavior;
 
 public class UserService {
     private final Cluster cluster;
@@ -185,21 +194,18 @@ public class UserService {
     }
     
     private Behavior getLatestBehavior() {
-        // Get the most recent version of the behavior from the cluster
-        return cluster.getBehavior(BEHAVIOR_NAME)
-            .orElseThrow(() -> new IllegalStateException(
-                "Behavior " + BEHAVIOR_NAME + " not found!"
-            ));
+        // Get the most recent version of the behavior from Behavior.getBehavior()
+        return Behavior.getBehavior(BEHAVIOR_NAME);
     }
 }
 ```
 
 **Scenario**:
-1. The application starts, and `monitorBehaviors()` is called.
+1. The application starts, and `Behavior.startMonitoring()` is called.
 2. A `UserService` instance is created.
 3. Initially, reads have a 1-second timeout.
 4. An operator edits `aerospike-behaviors.yaml` and changes `reads.abandonCallAfter` to `"500ms"`.
-5. The `BehaviorMonitor` reloads the file.
+5. The file monitor reloads the file.
 6. The very next call to `userService.performReadOperation()` will create a new session with the new 500ms timeout. No restart was needed.
 
 ---
@@ -223,7 +229,7 @@ Use a linter or an IDE plugin to ensure your YAML is well-formed before deployin
 ### ❌ DON'T
 
 **Don't cache `Behavior` objects in your services if you are using monitoring.**
-Always get the latest version from the `cluster` object.
+Always get the latest version using `Behavior.getBehavior()`.
 
 **Don't put sensitive information in your YAML files.**
 These files are for operational policies, not credentials.

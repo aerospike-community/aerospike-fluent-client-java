@@ -205,9 +205,9 @@ for (int i = 0; i < maxRetries; i++) {
     try {
         RecordStream result = session.query(accounts.id("acc123")).execute();
         if (result.hasNext()) {
-            KeyRecord keyRecord = result.next();
-            int currentBalance = keyRecord.record.getInt("balance");
-            int generation = keyRecord.record.generation;
+            RecordResult record = result.next();
+            int currentBalance = record.recordOrThrow().getInt("balance");
+            int generation = record.recordOrThrow().generation;
 
             // Perform modification
             session.update(accounts.id("acc123"))

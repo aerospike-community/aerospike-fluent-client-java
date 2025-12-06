@@ -107,8 +107,8 @@ public class ParallelScan {
                         .readingOnlyBins("bio")
                         .execute();
                     
-                    results.forEach(keyRecord -> {
-                        String bio = keyRecord.record.getString("bio");
+                    results.forEach(record -> {
+                        String bio = record.recordOrThrow().getString("bio");
                         if (bio != null) {
                             for (String word : bio.split("\\s+")) {
                                 wordCounts.merge(word.toLowerCase(), 1L, Long::sum);

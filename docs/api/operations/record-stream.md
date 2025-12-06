@@ -6,7 +6,7 @@ A forward-only iterator for processing query results.
 
 ## Overview
 
-All query operations in the Fluent Client return a `RecordStream`. It is a powerful, lazily evaluated iterator that allows you to process results from the database without loading them all into memory at once. It implements `Iterator<KeyRecord>` and `Closeable`, so it can be used in a `for-each` loop or a `try-with-resources` block.
+All query operations in the Fluent Client return a `RecordStream`. It is a powerful, lazily evaluated iterator that allows you to process results from the database without loading them all into memory at once. It implements `Iterator<RecordResult>` and `Closeable`, so it can be used in a `for-each` loop or a `try-with-resources` block.
 
 The `RecordStream` is designed to be flexible, supporting simple iteration, conversion to Java Streams, and object mapping.
 
@@ -21,9 +21,9 @@ The most basic way to process results is by using the `hasNext()` and `next()` m
 ```java
 try (RecordStream results = session.query(users.ids("a", "b", "c")).execute()) {
     while (results.hasNext()) {
-        KeyRecord keyRecord = results.next();
-        System.out.println("Key: " + keyRecord.key.userKey);
-        System.out.println("Record Bins: " + keyRecord.record.bins);
+        RecordResult record = results.next();
+        System.out.println("Key: " + record.key().userKey);
+        System.out.println("Record Bins: " + record.recordOrThrow().bins);
     }
 } // results.close() is automatically called here
 ```
@@ -35,8 +35,8 @@ For simple operations on each record, you can use the built-in `forEach` method.
 ```java
 session.query(users.ids("a", "b", "c"))
     .execute()
-    .forEach(keyRecord -> {
-        System.out.println("Processing user: " + keyRecord.key.userKey);
+    .forEach(record -> {
+        System.out.println("Processing user: " + record.key().userKey);
     });
 ```
 
@@ -52,7 +52,7 @@ List<String> activeUserNames = session.query(users)
     .readingOnlyBins("name")
     .execute()
     .stream()
-    .map(kr -> kr.record.getString("name"))
+    .map(kr -> kr.recordOrThrow().getString("name"))
     .filter(name -> name != null && !name.isEmpty())
     .collect(Collectors.toList());
 ```
@@ -62,19 +62,19 @@ List<String> activeUserNames = session.query(users)
 ### Iteration
 
 - **`boolean hasNext()`**: Returns `true` if the stream has more records.
-- **`KeyRecord next()`**: Returns the next `KeyRecord` in the iteration.
-- **`void forEach(Consumer<KeyRecord> consumer)`**: Performs the given action for each remaining element.
+- **`RecordResult next()`**: Returns the next `RecordResult` in the iteration.
+- **`void forEach(Consumer<RecordResult> consumer)`**: Performs the given action for each remaining element.
 
 ### Result Conversion
 
-- **`Stream<KeyRecord> stream()`**: Converts the `RecordStream` to a standard Java `Stream<KeyRecord>`.
-- **`List<KeyRecord> toList()`**: Consumes all records from the stream and collects them into a `List`. **Warning**: This can cause an `OutOfMemoryError` if the result set is large.
+- **`Stream<RecordResult> stream()`**: Converts the `RecordStream` to a standard Java `Stream<RecordResult>`.
+- **`List<RecordResult> toList()`**: Consumes all records from the stream and collects them into a `List`. **Warning**: This can cause an `OutOfMemoryError` if the result set is large.
 - **`<T> List<T> toObjectList()`**: If a `TypeSafeDataSet<T>` was used for the query, this method consumes all records and maps them to a `List<T>`.
 - **`<T> List<T> toObjectList(RecordMapper<T> mapper)`**: Consumes all records and maps them to a `List<T>` using the provided mapper.
 
 ### Single Record Retrieval
 
-- **`Optional<KeyRecord> getFirst()`**: Gets the first record in the stream and then closes it. Returns `Optional.empty()` if the stream is empty.
+- **`Optional<RecordResult> getFirst()`**: Gets the first record in the stream and then closes it. Returns `Optional.empty()` if the stream is empty.
 - **`<T> Optional<T> getFirst(RecordMapper<T> mapper)`**: Gets the first record, maps it to an object, and closes the stream.
 
 ### Pagination
@@ -103,7 +103,7 @@ If you convert to a Java `Stream`, the `onClose` handler is automatically attach
 
 **✅ Correct:**
 ```java
-try (Stream<KeyRecord> stream = session.query(users).execute().stream()) {
+try (Stream<RecordResult> stream = session.query(users).execute().stream()) {
     long count = stream.count();
 } // Both streams are closed
 ```
@@ -113,13 +113,13 @@ try (Stream<KeyRecord> stream = session.query(users).execute().stream()) {
 // This leaks a connection if not all records are consumed!
 RecordStream results = session.query(users).limit(10).execute();
 if (results.hasNext()) {
-    KeyRecord first = results.next();
+    RecordResult first = results.next();
     // The stream is never closed if there are more than 1 record
 }
 ```
 
 ## Related Classes
-- **[`KeyRecord`](https://www.aerospike.com/apidocs/java/com/aerospike/client/query/KeyRecord.html)**: The object returned by the iterator, containing the `Key` and `Record`.
+- **[`RecordResult`](../../api/record-result.md)**: The object returned by the iterator, containing the `Key`, `Record`, and result status.
 - **[`QueryBuilder`](./query-builder.md)**: The builder that produces a `RecordStream`.
 
 ## See Also

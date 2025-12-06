@@ -42,15 +42,15 @@ Key userKey = users.id("alice");
 
 ```java
 import com.aerospike.RecordStream;
-import com.aerospike.KeyRecord;
+import com.aerospike.RecordResult;
 import java.util.Optional;
 
 RecordStream result = session.query(userKey).execute();
 
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    String name = record.record.getString("name");
-    int age = record.record.getInt("age");
+    RecordResult record = result.next();
+    String name = record.recordOrThrow().getString("name");
+    int age = record.recordOrThrow().getInt("age");
     
     System.out.println("Name: " + name + ", Age: " + age);
 } else {
@@ -58,9 +58,9 @@ if (result.hasNext()) {
 }
 
 // Or using Optional for cleaner handling
-Optional<KeyRecord> optionalRecord = result.getFirst();
+Optional<RecordResult> optionalRecord = result.getFirst();
 optionalRecord.ifPresent(record -> {
-    System.out.println("Name: " + record.record.getString("name"));
+    System.out.println("Name: " + record.recordOrThrow().getString("name"));
 });
 ```
 
@@ -74,12 +74,12 @@ RecordStream result = session.query(userKey)
     .execute();
 
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    String name = record.record.getString("name");
-    String email = record.record.getString("email");
+    RecordResult record = result.next();
+    String name = record.recordOrThrow().getString("name");
+    String email = record.recordOrThrow().getString("email");
     
     // Note: age will be null
-    // int age = record.record.getInt("age"); // This would throw NullPointerException
+    // int age = record.recordOrThrow().getInt("age"); // This would throw NullPointerException
     
     System.out.println("Name: " + name + ", Email: " + email);
 }
@@ -95,9 +95,9 @@ RecordStream result = session.query(userKey)
     .execute();
 
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    int generation = record.record.generation;
-    int ttl = record.record.expiration;
+    RecordResult record = result.next();
+    int generation = record.recordOrThrow().generation;
+    int ttl = record.recordOrThrow().expiration;
     
     System.out.println("Record exists with generation: " + generation);
 } else {
@@ -122,7 +122,7 @@ List<Key> keys = users.ids("alice", "bob", "charlie");
 RecordStream results = session.query(keys).execute();
 
 results.forEach(record -> {
-    System.out.println("User: " + record.record.getString("name"));
+    System.out.println("User: " + record.recordOrThrow().getString("name"));
 });
 
 // Note: The order of results matches the order of keys provided
@@ -137,8 +137,8 @@ RecordStream results = session.query(keys)
 
 results.forEach(record -> {
     System.out.println(
-        "User: " + record.record.getString("name") +
-        ", Last Login: " + record.record.getLong("lastLogin")
+        "User: " + record.recordOrThrow().getString("name") +
+        ", Last Login: " + record.recordOrThrow().getLong("lastLogin")
     );
 });
 ```
@@ -179,7 +179,7 @@ DataSet users = DataSet.of("test", "users");
 RecordStream allUsers = session.query(users).execute();
 
 allUsers.forEach(record -> {
-    System.out.println("User: " + record.record.getString("name"));
+    System.out.println("User: " + record.recordOrThrow().getString("name"));
 });
 ```
 
@@ -222,7 +222,7 @@ if (result.hasNext()) {
 ### Getting the First Record
 
 ```java
-Optional<KeyRecord> optionalRecord = session.query(key)
+Optional<RecordResult> optionalRecord = session.query(key)
     .execute()
     .getFirst();
 
@@ -251,7 +251,7 @@ List<String> names = session.query(users)
     .readingOnlyBins("name")
     .execute()
     .stream()
-    .map(kr -> kr.record.getString("name"))
+    .map(kr -> kr.recordOrThrow().getString("name"))
     .filter(name -> name != null && name.startsWith("A"))
     .collect(Collectors.toList());
 ```
@@ -261,7 +261,7 @@ List<String> names = session.query(users)
 > **Warning**: This loads all results into memory. Use with caution on large result sets.
 
 ```java
-List<KeyRecord> records = session.query(keys)
+List<RecordResult> records = session.query(keys)
     .execute()
     .toList();
 ```
@@ -306,16 +306,16 @@ public class UserService {
             .readingOnlyBins("email")
             .execute()
             .stream()
-            .map(kr -> kr.record.getString("email"))
+            .map(kr -> kr.recordOrThrow().getString("email"))
             .collect(Collectors.toList());
     }
     
-    private User mapToUser(KeyRecord record) {
+    private User mapToUser(RecordResult record) {
         return new User(
-            (String) record.key.userKey.getObject(),
-            record.record.getString("name"),
-            record.record.getInt("age"),
-            record.record.getString("email")
+            (String) record.key().userKey.getObject(),
+            record.recordOrThrow().getString("name"),
+            record.recordOrThrow().getInt("age"),
+            record.recordOrThrow().getString("email")
         );
     }
 }
@@ -353,7 +353,7 @@ If the connection to the cluster is lost during the operation.
 ```java
 try {
     RecordStream results = session.query(keys).execute();
-    List<KeyRecord> records = results.toList(); // Network error could happen here
+    List<RecordResult> records = results.toList(); // Network error could happen here
 } catch (AerospikeException.Connection e) {
     System.err.println("Connection to the cluster was lost: " + e.getMessage());
     // Implement logic to handle reconnection.
@@ -393,7 +393,7 @@ long activeUsers = session.query(users)
     .readingOnlyBins("active")
     .execute()
     .stream()
-    .filter(kr -> kr.record.getBoolean("active"))
+    .filter(kr -> kr.recordOrThrow().getBoolean("active"))
     .count();
 ```
 
@@ -416,7 +416,7 @@ for (String id : ids) {
 **Don't load large scans into memory**
 ```java
 // ❌ Bad: Potential OutOfMemoryError
-List<KeyRecord> all = session.query(users).execute().toList();
+List<RecordResult> all = session.query(users).execute().toList();
 ```
 
 ---

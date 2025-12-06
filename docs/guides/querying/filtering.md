@@ -256,7 +256,7 @@ public class ProductFilterService {
             .collect(Collectors.toList());
     }
     
-    private Product mapToProduct(KeyRecord kr) {
+    private Product mapToProduct(RecordResult kr) {
         // Mapping logic...
         return new Product(...);
     }

@@ -169,7 +169,7 @@ public class UserProfileManager {
             .execute();
             
         if (result.hasNext()) {
-            return (Map<String, Object>) result.next().record.getValue("profile");
+            return (Map<String, Object>) result.next().recordOrThrow().getValue("profile");
         }
         return Map.of();
     }
@@ -233,7 +233,7 @@ public class CategoryManager {
             .execute();
             
         if (result.hasNext()) {
-            return (List<String>) result.next().record.getValue("categories");
+            return (List<String>) result.next().recordOrThrow().getValue("categories");
         }
         return List.of();
     }
@@ -351,7 +351,7 @@ public class UserActivitySystem {
             .execute();
             
         if (result.hasNext()) {
-            return (Map<String, Object>) result.next().record.getValue("profile");
+            return (Map<String, Object>) result.next().recordOrThrow().getValue("profile");
         }
         return Map.of();
     }
@@ -363,7 +363,7 @@ public class UserActivitySystem {
             .execute();
             
         if (result.hasNext()) {
-            return (List<Map<String, Object>>) result.next().record.getValue("activity");
+            return (List<Map<String, Object>>) result.next().recordOrThrow().getValue("activity");
         }
         return List.of();
     }

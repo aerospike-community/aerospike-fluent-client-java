@@ -151,8 +151,8 @@ for (int i = 0; i < maxRetries; i++) {
     try {
         RecordStream result = session.query(key).execute();
         if (result.hasNext()) {
-            KeyRecord record = result.next();
-            int generation = record.record.generation;
+            RecordResult record = result.next();
+            int generation = record.recordOrThrow().generation;
             
             session.update(key)
                 .bin("balance").add(100)
@@ -406,8 +406,8 @@ abandonCallAfter: "2h"       # hours
 ```java
 RecordStream result = session.query(key).execute();
 if (result.hasNext()) {
-    KeyRecord record = result.next();
-    int generation = record.record.generation;
+    RecordResult record = result.next();
+    int generation = record.recordOrThrow().generation;
     
     session.update(key)
         .bin("balance").add(100)

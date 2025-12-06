@@ -34,11 +34,11 @@ session.upsert(users.id("alice"))
 // Manual deserialization
 RecordStream result = session.query(users.id("alice")).execute();
 if (result.hasNext()) {
-    KeyRecord kr = result.next();
-    String id = (String) kr.key.userKey.getObject();
-    String name = kr.record.getString("name");
-    int age = kr.record.getInt("age");
-    String email = kr.record.getString("email");
+    RecordResult kr = result.next();
+    String id = (String) kr.key().userKey.getObject();
+    String name = kr.recordOrThrow().getString("name");
+    int age = kr.recordOrThrow().getInt("age");
+    String email = kr.recordOrThrow().getString("email");
     
     Customer customer = new Customer(id, name, age, email);
 }

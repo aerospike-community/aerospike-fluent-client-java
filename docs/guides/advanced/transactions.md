@@ -64,7 +64,7 @@ public void transferFunds(String fromAccountId, String toAccountId, double amoun
     txnSession.doInTransaction(tx -> {
         // 1. Read the "from" account's balance
         RecordStream fromResult = tx.query(fromKey).readingOnlyBins("balance").execute();
-        double fromBalance = fromResult.getFirst().get().record.getDouble("balance");
+        double fromBalance = fromResult.getFirst().get().recordOrThrow().getDouble("balance");
 
         if (fromBalance < amount) {
             throw new InsufficientFundsException("Balance too low for transfer");
@@ -72,7 +72,7 @@ public void transferFunds(String fromAccountId, String toAccountId, double amoun
 
         // 2. Read the "to" account's balance
         RecordStream toResult = tx.query(toKey).readingOnlyBins("balance").execute();
-        double toBalance = toResult.getFirst().get().record.getDouble("balance");
+        double toBalance = toResult.getFirst().get().recordOrThrow().getDouble("balance");
 
         // 3. Update both accounts within the same transaction
         tx.update(fromKey)

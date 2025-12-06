@@ -86,7 +86,7 @@ RecordStream result = session.query(products.id("product123"))
     
 if (result.hasNext()) {
     Map<String, Object> attributes = 
-        (Map<String, Object>) result.next().record.getValue("attributes");
+        (Map<String, Object>) result.next().recordOrThrow().getValue("attributes");
 }
 ```
 
@@ -98,7 +98,7 @@ RecordStream result = session.query(products.id("product123"))
     .execute();
 
 if (result.hasNext()) {
-    Long size = result.next().record.getLong("attributes");
+    Long size = result.next().recordOrThrow().getLong("attributes");
     System.out.println("Map has " + size + " entries");
 }
 ```
@@ -316,7 +316,7 @@ public class PreferencesManager {
             .execute();
             
         if (result.hasNext()) {
-            return result.next().record.getValue("preferences");
+            return result.next().recordOrThrow().getValue("preferences");
         }
         return null;
     }
@@ -348,7 +348,7 @@ public class StatsTracker {
             .execute();
             
         if (result.hasNext()) {
-            return (Map<String, Long>) result.next().record.getValue("stats");
+            return (Map<String, Long>) result.next().recordOrThrow().getValue("stats");
         }
         return Map.of();
     }
@@ -378,7 +378,7 @@ public class ProductAttributes {
             .execute();
             
         if (result.hasNext()) {
-            return (Map<String, Object>) result.next().record.getValue("attributes");
+            return (Map<String, Object>) result.next().recordOrThrow().getValue("attributes");
         }
         return Map.of();
     }
@@ -470,7 +470,7 @@ public class ProductManager {
             .execute();
             
         if (result.hasNext()) {
-            return (Map<String, Object>) result.next().record.getValue("attributes");
+            return (Map<String, Object>) result.next().recordOrThrow().getValue("attributes");
         }
         return Map.of();
     }
@@ -481,7 +481,7 @@ public class ProductManager {
             .execute();
             
         if (result.hasNext()) {
-            return (Map<String, Long>) result.next().record.getValue("stats");
+            return (Map<String, Long>) result.next().recordOrThrow().getValue("stats");
         }
         return Map.of();
     }

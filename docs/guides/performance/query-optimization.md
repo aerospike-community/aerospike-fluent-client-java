@@ -77,7 +77,7 @@ int generation = session.query(userKey)
     .withNoBins()
     .execute()
     .getFirst()
-    .get().record.generation;
+    .get().recordOrThrow().generation;
 ```
 
 ## 3. Understand Your Filters

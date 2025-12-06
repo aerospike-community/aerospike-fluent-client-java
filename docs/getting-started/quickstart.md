@@ -134,9 +134,9 @@ import com.aerospike.ClusterDefinition;
 import com.aerospike.DataSet;
 import com.aerospike.Session;
 import com.aerospike.RecordStream;
-import com.aerospike.KeyRecord;
+import com.aerospike.RecordResult;
 import com.aerospike.policy.Behavior;
-import com.aerospike.exception.AerospikeException;
+import com.aerospike.client.AerospikeException;
 
 public class QuickStart {
     public static void main(String[] args) {
@@ -172,12 +172,12 @@ public class QuickStart {
                 .execute();
             
             if (result.hasNext()) {
-                KeyRecord record = result.next();
+                RecordResult record = result.next();
                 System.out.println("   📄 Record found:");
-                System.out.println("      Name: " + record.record.getString("name"));
-                System.out.println("      Age: " + record.record.getInt("age"));
-                System.out.println("      Email: " + record.record.getString("email"));
-                System.out.println("      City: " + record.record.getString("city"));
+                System.out.println("      Name: " + record.recordOrThrow().getString("name"));
+                System.out.println("      Age: " + record.recordOrThrow().getInt("age"));
+                System.out.println("      Email: " + record.recordOrThrow().getString("email"));
+                System.out.println("      City: " + record.recordOrThrow().getString("city"));
             }
             System.out.println();
             
@@ -207,10 +207,10 @@ public class QuickStart {
             
             int count = 0;
             while (queryResults.hasNext()) {
-                KeyRecord record = queryResults.next();
+                RecordResult record = queryResults.next();
                 count++;
-                System.out.println("   📄 " + record.record.getString("name") + 
-                                 " (age " + record.record.getInt("age") + ")");
+                System.out.println("   📄 " + record.recordOrThrow().getString("name") + 
+                                 " (age " + record.recordOrThrow().getInt("age") + ")");
             }
             System.out.println("   Found " + count + " records\n");
             
