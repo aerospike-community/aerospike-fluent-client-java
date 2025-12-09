@@ -17,13 +17,17 @@ import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
+import com.aerospike.SystemSettings;
+import com.aerospike.SystemSettingsRegistry;
 import com.aerospike.TypeSafeDataSet;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
+import com.aerospike.client.Value;
+import com.aerospike.client.cdt.MapOperation;
 import com.aerospike.client.cdt.MapOrder;
-import com.aerospike.client.query.KeyRecord;
+import com.aerospike.client.cdt.MapReturnType;
 import com.aerospike.client.task.ExecuteTask;
 import com.aerospike.dslobjects.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
@@ -47,7 +51,7 @@ public class QueryExamples {
         }
     }
     
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         try (Cluster cluster = new ClusterDefinition("localhost", 3100)
                 .usingServicesAlternate()
                 .withNativeCredentials("admin", "password123")
@@ -82,6 +86,9 @@ public class QueryExamples {
                 .on(Selectors.reads().query(), ops -> ops
                         .waitForCallToComplete(Duration.ofSeconds(2))
                         .abandonCallAfter(Duration.ofSeconds(30))
+                )
+                .on(Selectors.writes().retryable(), ops -> ops
+                        .maximumNumberOfCallAttempts(5)
                 )
                 .on(Selectors.reads().batch(), ops -> ops
                         .maximumNumberOfCallAttempts(7)
@@ -154,7 +161,6 @@ public class QueryExamples {
 
 //            sessionWithoutExceptions.insert(customerDataSet.id(80))
 //                    .bin("name").setTo("Bob")
-//                    .execute()
 //                    .getFirst();
 
             session.upsert(customerDataSet.id(100))
@@ -233,6 +239,38 @@ public class QueryExamples {
                 .execute();
         
             
+            Key key = customerDataSet.id(102);
+            int count;
+            
+            // Old style
+            count = cluster.getUnderlyingClient().operate(null, key, MapOperation.getByKeyRange("rooms", Value.get("room2"), Value.get("room3"), MapReturnType.COUNT | MapReturnType.INVERTED)).getInt("rooms");
+            System.out.println(count);
+            count = cluster.getUnderlyingClient().operate(null, key, MapOperation.getByKeyRange("rooms", Value.get("room2"), Value.get("room3"), MapReturnType.COUNT)).getInt("rooms");
+            System.out.println(count);
+            // New style
+            count = session.update(key).bin("rooms").onMapKeyRange("room2", "room3").countAllOthers().execute().getFirstRecord().getInt("rooms");
+            System.out.println(count);
+            count = session.update(key).bin("rooms").onMapKeyRange("room2", "room3").count().execute().getFirstRecord().getInt("rooms");
+            System.out.println(count);
+            
+            // Now use getByKey instead, first non-inverted then inverted
+            // Old style
+            try {
+                count = cluster.getUnderlyingClient().operate(null, key, MapOperation.getByKey("rooms", Value.get("room2"), MapReturnType.COUNT | MapReturnType.INVERTED)).getInt("rooms");
+                System.out.println(count);
+            }
+            catch (AerospikeException ae) {
+                System.out.println("excpetion: " + ae.getMessage());
+            }
+            count = cluster.getUnderlyingClient().operate(null, key, MapOperation.getByKey("rooms", Value.get("room2"), MapReturnType.COUNT)).getInt("rooms");
+            System.out.println(count);
+            // New style
+//            count = session.update(key).bin("rooms").onMapKey("room2").countAllOthers().execute().getFirstRecord().getInt("rooms");
+//            System.out.println(count);
+            count = session.update(key).bin("rooms").onMapKey("room2").count().execute().getFirstRecord().getInt("rooms");
+            System.out.println(count);
+            
+            
             RecordStream results = session.upsert(customerDataSet.id(102)) 
                 .bin("name").setTo("Bob")
                 .bin("age").setTo(30)
@@ -254,13 +292,12 @@ public class QueryExamples {
                 .execute();
             System.out.println(results.getFirst());
             System.out.println(session.query(customerDataSet.id(102)).execute().getFirst());
-            session.update(customerDataSet.id(102))
+            session.update(customerDataSet.ids(102, 103, 104))
                 .bin("name").append("-test")
                 .bin("age").add(1)
                 .execute();
             System.out.println(session.query(customerDataSet.id(102)).execute().getFirst());
             
-    
             session.upsert(customerDataSet.id(102))
                 .bin("name").setTo("Sue")
                 .bin("age").setTo(26)
@@ -461,7 +498,10 @@ public class QueryExamples {
             int chunk = 0;
             while (rs.hasMoreChunks()) {
                 System.out.println("Chunk: " + (++chunk));
-                rs.forEach(rec -> System.out.println(rec));
+                for (RecordResult x : rs) {
+                    System.out.println(x);
+                }
+                // rs.forEach(rec -> System.out.println(rec));
             }
             
             int total = session.query(customerDataSet)
@@ -471,7 +511,7 @@ public class QueryExamples {
                 .sum();
             System.out.println("\n\nSorting customers by Name with a where clause using NavigatableRecordStream");
             customers = session.query(customerDataSet)
-                    .where("$.name == 'Tim' and $.age > 30")
+                    .where("$.name == 'Tim' and $.age > 30 and $.map.{'*'}.[13].")
                     .limit(1000)
                     .execute()
                     .asNavigatableStream()
