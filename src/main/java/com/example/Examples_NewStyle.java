@@ -5,10 +5,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Map;
 
+import com.aerospike.ChainableOperationBuilder;
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.DataSet;
-import com.aerospike.OperationBuilder;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
 import com.aerospike.client.Key;
@@ -103,7 +103,7 @@ public class Examples_NewStyle {
             session.upsert(key1).bin("name").setTo("Fred").bin("age").setTo(21).execute();
             session.upsert(key2).bins("name", "age").values("Alex", 99).execute();
 
-            OperationBuilder builder = session.upsert(key1);
+            ChainableOperationBuilder builder = session.upsert(key1);
             builder.bin("a").setTo("b");
             builder.bin("b").setTo("c");
             builder.execute();

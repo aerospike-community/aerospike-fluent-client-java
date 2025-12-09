@@ -88,7 +88,7 @@ public abstract class AbstractSessionOperationBuilder<T extends AbstractSessionO
     /**
      * Validate and calculate expiration from a Date object.
      */
-    protected long getExpirationInSecondsAndCheckValue(Date date) {
+    public long getExpirationInSecondsAndCheckValue(Date date) {
         long expirationInSeconds = (date.getTime() - new Date().getTime()) / 1000L;
         if (expirationInSeconds < 0) {
             throw new IllegalArgumentException("Expiration must be set in the future, not to " + date);
@@ -111,7 +111,7 @@ public abstract class AbstractSessionOperationBuilder<T extends AbstractSessionO
     /**
      * Validate and calculate expiration from a LocalDateTime object.
      */
-    protected long getExpirationInSecondsAndCheckValue(LocalDateTime date) {
+    public long getExpirationInSecondsAndCheckValue(LocalDateTime date) {
         LocalDateTime now = LocalDateTime.now();
         long expirationInSeconds = ChronoUnit.SECONDS.between(now, date);
         if (expirationInSeconds < 0) {
@@ -231,6 +231,8 @@ public abstract class AbstractSessionOperationBuilder<T extends AbstractSessionO
             return RecordExistsAction.UPDATE;
         case REPLACE:
             return RecordExistsAction.REPLACE;
+        case TOUCH:
+            return RecordExistsAction.UPDATE_ONLY;
         default:
             throw new IllegalStateException("received an action of " + opType + " which should be handled elsewhere");
         }
