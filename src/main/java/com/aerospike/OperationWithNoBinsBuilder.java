@@ -18,6 +18,7 @@ import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dslobjects.BooleanExpression;
+import com.aerospike.exception.AeroException;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
 import com.aerospike.query.PreparedDsl;
@@ -227,10 +228,16 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
         return super.getExpirationAsInt(effectiveExpiration);
     }
     
-    private List<Boolean> toList(boolean[] booleanArray) {
-        List<Boolean> results = new ArrayList<>();
+    /**
+     * Convert boolean array results (from EXISTS batch) to RecordResult list.
+     * true -> ResultCode.OK, false -> ResultCode.KEY_NOT_FOUND_ERROR
+     */
+    private List<RecordResult> toRecordResults(boolean[] booleanArray, Key[] keyArray) {
+        List<RecordResult> results = new ArrayList<>();
         for (int i = 0; i < booleanArray.length; i++) {
-            results.add(booleanArray[i]);
+            int resultCode = booleanArray[i] ? ResultCode.OK : ResultCode.KEY_NOT_FOUND_ERROR;
+            results.add(new RecordResult(keyArray[i], resultCode, false, 
+                    ResultCode.getResultString(resultCode), i));
         }
         return results;
     }
@@ -276,17 +283,20 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
     }
     
     /**
-     * Process batch results into a list of booleans, handling filtered out records.
+     * Process batch results into a list of RecordResults, handling filtered out records.
+     * OK -> ResultCode.OK, not OK -> original result code (including KEY_NOT_FOUND_ERROR)
      */
-    private List<Boolean> processBatchResults(BatchResults results) {
-        List<Boolean> booleanArray = new ArrayList<>();
+    private List<RecordResult> processBatchResults(BatchResults results) {
+        List<RecordResult> recordResults = new ArrayList<>();
+        int index = 0;
         for (BatchRecord record : results.records) {
             if (failOnFilteredOut && record.resultCode == ResultCode.FILTERED_OUT) {
                 throw new RuntimeException("Record was filtered out by filter expression");
             }
-            booleanArray.add(record.resultCode == ResultCode.OK);
+            // Use the actual result code from the batch record
+            recordResults.add(new RecordResult(record, index++));
         }
-        return booleanArray;
+        return recordResults;
     }
     
     /**
@@ -329,8 +339,10 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
         return wp;
     }
     
-    private List<Boolean> batchExecute(WritePolicy wp) {
+    private RecordStream batchExecute(WritePolicy wp) {
         String namespace = getAnyKey().namespace;
+        Key[] keyArray = keys.toArray(new Key[0]);
+        List<RecordResult> recordResults;
         
         switch (opType) {
         case EXISTS: {
@@ -339,8 +351,9 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
                     .asBatchPolicy();
             batchPolicy = applyBatchPolicySettings(batchPolicy, namespace);
             
-            boolean[] results = session.getClient().exists(batchPolicy, keys.toArray(new Key[0]));
-            return toList(results);
+            boolean[] results = session.getClient().exists(batchPolicy, keyArray);
+            recordResults = toRecordResults(results, keyArray);
+            break;
         }
         
         case TOUCH: {
@@ -357,8 +370,9 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
             }
             applyGenerationPolicy(batchWritePolicy);
             
-            BatchResults results = session.getClient().operate(batchPolicy, batchWritePolicy, keys.toArray(Key[]::new), Operation.touch());
-            return processBatchResults(results);
+            BatchResults results = session.getClient().operate(batchPolicy, batchWritePolicy, keyArray, Operation.touch());
+            recordResults = processBatchResults(results);
+            break;
         }
             
         case DELETE: {
@@ -376,16 +390,19 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
                 batchDeletePolicy.durableDelete = durablyDelete;
             }
             
-            BatchResults results = session.getClient().delete(batchPolicy, batchDeletePolicy, keys.toArray(Key[]::new));
-            return processBatchResults(results);
+            BatchResults results = session.getClient().delete(batchPolicy, batchDeletePolicy, keyArray);
+            recordResults = processBatchResults(results);
+            break;
         }
         
         default:
             throw new IllegalStateException("received an action of " + opType + " which should be handled elsewhere");
         }
+        
+        return new RecordStream(recordResults, 0L);
     }
 
-    public List<Boolean> execute() {
+    public RecordStream execute() {
         if (key != null) {
             // Single key operation
             return executeSingleKey();
@@ -399,7 +416,7 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
         }
     }
     
-    private List<Boolean> executeSingleKey() {
+    private RecordStream executeSingleKey() {
         OpKind opKind = (opType == OpType.EXISTS) ? OpKind.READ : OpKind.WRITE_RETRYABLE;
         WritePolicy wp = session.getBehavior()
                 .getSettings(opKind, OpShape.POINT, session.isNamespaceSC(key.namespace))
@@ -426,8 +443,15 @@ public class OperationWithNoBinsBuilder extends AbstractSessionOperationBuilder<
             if (failOnFilteredOut && e.getResultCode() == ResultCode.FILTERED_OUT) {
                 throw new RuntimeException("Record was filtered out by filter expression", e);
             }
-            throw e;
+            // For other exceptions, wrap in RecordResult
+            return new RecordStream(new RecordResult(key, AeroException.from(e), 0));
         }
-        return List.of(result);
+        
+        // Convert boolean result to RecordResult
+        // true -> ResultCode.OK, false -> ResultCode.KEY_NOT_FOUND_ERROR
+        int resultCode = result ? ResultCode.OK : ResultCode.KEY_NOT_FOUND_ERROR;
+        RecordResult recordResult = new RecordResult(key, resultCode, false, 
+                ResultCode.getResultString(resultCode), 0);
+        return new RecordStream(recordResult);
     }
 }

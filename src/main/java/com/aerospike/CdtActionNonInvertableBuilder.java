@@ -19,14 +19,14 @@ package com.aerospike;
  *   <li>NONE → remove()</li>
  * </ul>
  */
-public interface CdtActionNonInvertableBuilder {
-    public OperationBuilder getValues();
-    public OperationBuilder getKeys();
-    public OperationBuilder count();
-    public OperationBuilder getIndex();
-    public OperationBuilder getReverseIndex();
-    public OperationBuilder getRank();
-    public OperationBuilder getReverseRank();
-    public OperationBuilder getKeyAndValue();
-    public OperationBuilder remove();
+public interface CdtActionNonInvertableBuilder<T extends AbstractOperationBuilder<T>> {
+    public T getValues();
+    public T getKeys();
+    public T count();
+    public T getIndex();
+    public T getReverseIndex();
+    public T getRank();
+    public T getReverseRank();
+    public T getKeyAndValue();
+    public T remove();
 }

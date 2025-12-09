@@ -97,4 +97,17 @@ public record RecordResult(Key key, Record recordOrNull, int resultCode, AeroExc
         orThrow();
         return recordOrNull;
     }
+    
+    public boolean asBoolean() {
+        if (isOk()) {
+            return true;
+        }
+        else if (this.resultCode == ResultCode.KEY_NOT_FOUND_ERROR) {
+            return false;
+        }
+        orThrow();
+        // Just to keep the compiler happy
+        return false;
+    }
+
 }

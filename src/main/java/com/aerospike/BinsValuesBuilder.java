@@ -7,7 +7,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -52,20 +51,22 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     }
     
     private long expirationInSecondsForAll = 0; 
-    private final OperationBuilder opBuilder;
+    private final BinsValuesOperations opBuilder;
     private final String[] binNames;
     private final Map<Key, ValueData> valueSets = new HashMap<>();
     private final List<Key> keys;
     private ValueData current = null;
     private Txn txnToUse;
     
-    public BinsValuesBuilder(OperationBuilder opBuilder, List<Key> keys, String binName, String... binNames) {
+    public BinsValuesBuilder(BinsValuesOperations opBuilder, List<Key> keys, String binName, String... binNames) {
         this.opBuilder = opBuilder;
         this.binNames = new String[1 + binNames.length];
         this.binNames[0] = binName;
         System.arraycopy(binNames, 0, this.binNames, 1, binNames.length);
         this.keys = keys;
-        this.txnToUse = opBuilder.getTxnToUse();
+        if (opBuilder instanceof AbstractSessionOperationBuilder) {
+            this.txnToUse = ((AbstractSessionOperationBuilder<?>) opBuilder).getTxnToUse();
+        }
     }
     
     /**
@@ -387,7 +388,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
     protected RecordStream executeBatchSync() {
         Settings settings = opBuilder.getSession().getBehavior()
                 .getSettings(OpKind.WRITE_NON_RETRYABLE, OpShape.BATCH, opBuilder.getSession().isNamespaceSC(keys.get(0).namespace));
-        BatchPolicy batchPolicy = settings.asBatchPolicy();
+        BatchPolicy batchPolicy = new BatchPolicy();
 
         batchPolicy.setTxn(txnToUse);
         
@@ -407,7 +408,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
                 bwp.generationPolicy = GenerationPolicy.EXPECT_GEN_EQUAL;
             }
             bwp.expiration = getExpiration(valueSet);
-            bwp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opBuilder.opType);
+            bwp.recordExistsAction = OperationBuilder.recordExistsActionFromOpType(opBuilder.getOpType());
             bwp.sendKey = settings.getSendKey();
             bwp.durableDelete = settings.getUseDurableDelete();
             batchRecords.add(new BatchWrite(bwp, key, ops));
@@ -451,7 +452,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             Operation[] ops = getOperationsForValueData(valueSet);
             Settings settings = opBuilder.getSession().getBehavior()
                     .getSettings(OpKind.WRITE_RETRYABLE, OpShape.POINT, opBuilder.getSession().isNamespaceSC(firstKey.namespace));
-            WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
+            WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.getOpType());
             wp.expiration = getExpiration(valueSet);
             wp.txn = this.txnToUse;
             wp.filterExp = whereExp;
@@ -490,7 +491,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             Thread.startVirtualThread(() -> {
                 try {
                     Operation[] ops = getOperationsForValueData(valueSet);
-                    WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
+                    WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.getOpType());
                     wp.expiration = getExpiration(valueSet);
                     wp.txn = this.txnToUse;
                     wp.filterExp = whereExp;
@@ -550,7 +551,7 @@ public class BinsValuesBuilder extends AbstractFilterableBuilder implements Filt
             Thread.startVirtualThread(() -> {
                 try {
                     Operation[] ops = getOperationsForValueData(valueSet);
-                    WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.opType);
+                    WritePolicy wp = opBuilder.getWritePolicy(settings, valueSet.generation, this.opBuilder.getOpType());
                     wp.expiration = getExpiration(valueSet);
                     wp.txn = this.txnToUse;
                     wp.filterExp = whereExp;

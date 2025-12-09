@@ -6,57 +6,69 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
+import com.aerospike.client.AerospikeException;
+import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
+import com.aerospike.client.Log;
+import com.aerospike.client.Operation;
 import com.aerospike.client.Record;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.exp.Expression;
+import com.aerospike.client.policy.GenerationPolicy;
+import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.dsl.ParseResult;
 import com.aerospike.dslobjects.BooleanExpression;
+import com.aerospike.exception.AeroException;
+import com.aerospike.policy.Settings;
 import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
 /**
- * Builder for chainable batch operations that do NOT support bin-level modifications.
- * This builder is used for {@code delete}, {@code touch}, and {@code exists} operations.
+ * Builder for chainable batch operations that support bin-level modifications.
+ * This builder is used for {@code upsert}, {@code update}, {@code insert}, and {@code replace} operations.
  * 
- * <p>Unlike {@link ChainableOperationBuilder}, this class does not have a {@code bin()} method
- * since these operations don't modify bin values. However, they can still set expiration,
- * generation checks, and filter clauses.
+ * <p>This class allows chaining multiple heterogeneous operations (upsert, update, insert, replace,
+ * delete, touch, exists, query) together, which are then executed as a single batch operation
+ * for optimal performance.
  * 
  * <p>Example usage:
  * <pre>{@code
- * session.delete(users.ids("user-1", "user-2"))
- *     .where("$.status == 'inactive'")
- *     .touch(users.id("user-3"))
- *     .expireRecordAfter(Duration.ofDays(30))
- *     .upsert(users.id("user-4"))
- *     .bin("status").setTo("active")
+ * session.upsert(users.id("user-1"))
+ *     .bin("name").setTo("Alice")
+ *     .bin("age").setTo(30)
+ *     .update(users.id("user-2"))
+ *     .bin("loginCount").add(1)
+ *     .delete(users.id("user-3"))
  *     .execute();
  * }</pre>
  * 
- * @see ChainableOperationBuilder for operations with bin modifications
+ * @see ChainableNoBinsBuilder for operations without bin modifications
  * @see ChainableQueryBuilder for read operations
  */
-public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<ChainableNoBinsBuilder>
-        implements FilterableOperation<ChainableNoBinsBuilder> {
+public class ChainableOperationBuilder extends AbstractOperationBuilder<ChainableOperationBuilder>
+        implements FilterableOperation<ChainableOperationBuilder> {
     
-    private final Session session;
     private final List<OperationSpec> operationSpecs;
     private OperationSpec currentSpec = null;
     private Expression defaultWhereClause;
-    private Txn txnToUse;
     
     /**
-     * Package-private constructor.
+     * Package-private constructor for creating a new chain.
      */
-    ChainableNoBinsBuilder(Session session, List<OperationSpec> existingSpecs, 
-                           Expression defaultWhereClause, Txn txnToUse) {
-        super(session, null);  // opType will be set per operation
-        this.session = session;
+    ChainableOperationBuilder(Session session, OpType opType) {
+        super(session, opType);
+        this.operationSpecs = new ArrayList<>();
+    }
+    
+    /**
+     * Package-private constructor for continuing an existing chain.
+     */
+    ChainableOperationBuilder(Session session, OpType opType, List<OperationSpec> existingSpecs,
+                              Expression defaultWhereClause, Txn txnToUse) {
+        super(session, opType);
         this.operationSpecs = existingSpecs;
         this.defaultWhereClause = defaultWhereClause;
         this.txnToUse = txnToUse;
@@ -66,39 +78,107 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     // Initialization methods
     // ========================================
     
-    ChainableNoBinsBuilder initDelete(Key key) {
+    ChainableOperationBuilder init(Key key, OpType opType) {
         finalizeCurrentOperation();
-        currentSpec = new OperationSpec(List.of(key), OpType.DELETE);
+        currentSpec = new OperationSpec(List.of(key), opType);
         return this;
     }
     
-    ChainableNoBinsBuilder initDelete(List<Key> keys) {
+    ChainableOperationBuilder init(List<Key> keys, OpType opType) {
         finalizeCurrentOperation();
-        currentSpec = new OperationSpec(keys, OpType.DELETE);
+        currentSpec = new OperationSpec(keys, opType);
         return this;
     }
     
-    ChainableNoBinsBuilder initTouch(Key key) {
-        finalizeCurrentOperation();
-        currentSpec = new OperationSpec(List.of(key), OpType.TOUCH);
+    // ========================================
+    // Bin operations - override to use OperationSpec
+    // ========================================
+    
+    /**
+     * Returns a bin builder for operating on a specific bin.
+     * This starts a bin operation that will be part of the current operation spec.
+     * 
+     * @param binName the name of the bin
+     * @return BinBuilder for constructing bin operations
+     */
+    @Override
+    public BinBuilder<ChainableOperationBuilder> bin(String binName) {
+        verifyState("adding bin operation");
+        return new BinBuilder<>(this, binName);
+    }
+    
+    /**
+     * Specify a set of bin names for the bins+values pattern.
+     * Use this followed by {@code .values(...)} to efficiently set multiple bins at once.
+     * 
+     * <p>Note: This is only for setting simple values, not for CDT operations.
+     * 
+     * @param binName the first bin name (required)
+     * @param binNames additional bin names
+     * @return BinsValuesBuilder for specifying values
+     */
+    public BinsValuesBuilder bins(String binName, String... binNames) {
+        verifyState("specifying bins");
+        return new BinsValuesBuilder(new ChainableBinsValuesOperations(), currentSpec.keys, binName, binNames);
+    }
+    
+    /**
+     * Override setTo to store in currentSpec.operations instead of inherited ops.
+     */
+    @Override
+    protected ChainableOperationBuilder setTo(Bin bin) {
+        verifyState("setting bin value");
+        currentSpec.operations.add(Operation.put(bin));
         return this;
     }
     
-    ChainableNoBinsBuilder initTouch(List<Key> keys) {
-        finalizeCurrentOperation();
-        currentSpec = new OperationSpec(keys, OpType.TOUCH);
+    /**
+     * Override get to store in currentSpec.operations.
+     */
+    @Override
+    protected ChainableOperationBuilder get(String binName) {
+        verifyState("getting bin value");
+        currentSpec.operations.add(Operation.get(binName));
         return this;
     }
     
-    ChainableNoBinsBuilder initExists(Key key) {
-        finalizeCurrentOperation();
-        currentSpec = new OperationSpec(List.of(key), OpType.EXISTS);
+    /**
+     * Override append to store in currentSpec.operations.
+     */
+    @Override
+    protected ChainableOperationBuilder append(Bin bin) {
+        verifyState("appending to bin");
+        currentSpec.operations.add(Operation.append(bin));
         return this;
     }
     
-    ChainableNoBinsBuilder initExists(List<Key> keys) {
-        finalizeCurrentOperation();
-        currentSpec = new OperationSpec(keys, OpType.EXISTS);
+    /**
+     * Override prepend to store in currentSpec.operations.
+     */
+    @Override
+    protected ChainableOperationBuilder prepend(Bin bin) {
+        verifyState("prepending to bin");
+        currentSpec.operations.add(Operation.prepend(bin));
+        return this;
+    }
+    
+    /**
+     * Override add to store in currentSpec.operations.
+     */
+    @Override
+    protected ChainableOperationBuilder add(Bin bin) {
+        verifyState("adding to bin");
+        currentSpec.operations.add(Operation.add(bin));
+        return this;
+    }
+    
+    /**
+     * Override addOp to store in currentSpec.operations.
+     */
+    @Override
+    protected ChainableOperationBuilder addOp(Operation op) {
+        verifyState("adding operation");
+        currentSpec.operations.add(op);
         return this;
     }
     
@@ -108,29 +188,22 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain an upsert operation on a single key.
-     * Returns a {@link ChainableOperationBuilder} since upsert operations support bin modifications.
      * 
      * @param key the key to upsert
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder upsert(Key key) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.UPSERT);
-        transferState(builder);
-        return builder.init(key, OpType.UPSERT);
+        return init(key, OpType.UPSERT);
     }
     
     /**
      * Chain an upsert operation on multiple keys.
      * 
      * @param keys the keys to upsert
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder upsert(List<Key> keys) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.UPSERT);
-        transferState(builder);
-        return builder.init(keys, OpType.UPSERT);
+        return init(keys, OpType.UPSERT);
     }
     
     /**
@@ -139,7 +212,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder upsert(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -151,29 +224,22 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain an update operation on a single key.
-     * Returns a {@link ChainableOperationBuilder} since update operations support bin modifications.
      * 
      * @param key the key to update
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder update(Key key) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.UPDATE);
-        transferState(builder);
-        return builder.init(key, OpType.UPDATE);
+        return init(key, OpType.UPDATE);
     }
     
     /**
      * Chain an update operation on multiple keys.
      * 
      * @param keys the keys to update
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder update(List<Key> keys) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.UPDATE);
-        transferState(builder);
-        return builder.init(keys, OpType.UPDATE);
+        return init(keys, OpType.UPDATE);
     }
     
     /**
@@ -182,7 +248,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder update(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -194,29 +260,22 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain an insert operation on a single key.
-     * Returns a {@link ChainableOperationBuilder} since insert operations support bin modifications.
      * 
      * @param key the key to insert
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder insert(Key key) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.INSERT);
-        transferState(builder);
-        return builder.init(key, OpType.INSERT);
+        return init(key, OpType.INSERT);
     }
     
     /**
      * Chain an insert operation on multiple keys.
      * 
      * @param keys the keys to insert
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder insert(List<Key> keys) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.INSERT);
-        transferState(builder);
-        return builder.init(keys, OpType.INSERT);
+        return init(keys, OpType.INSERT);
     }
     
     /**
@@ -225,7 +284,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder insert(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -237,29 +296,22 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain a replace operation on a single key.
-     * Returns a {@link ChainableOperationBuilder} since replace operations support bin modifications.
      * 
      * @param key the key to replace
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder replace(Key key) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.REPLACE);
-        transferState(builder);
-        return builder.init(key, OpType.REPLACE);
+        return init(key, OpType.REPLACE);
     }
     
     /**
      * Chain a replace operation on multiple keys.
      * 
      * @param keys the keys to replace
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder replace(List<Key> keys) {
-        finalizeCurrentOperation();
-        ChainableOperationBuilder builder = new ChainableOperationBuilder(session, OpType.REPLACE);
-        transferState(builder);
-        return builder.init(keys, OpType.REPLACE);
+        return init(keys, OpType.REPLACE);
     }
     
     /**
@@ -268,7 +320,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return ChainableOperationBuilder for method chaining
+     * @return this builder for method chaining
      */
     public ChainableOperationBuilder replace(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -280,22 +332,27 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain a delete operation on a single key.
+     * Returns a {@link ChainableNoBinsBuilder} since delete operations don't support bin modifications.
      * 
      * @param key the key to delete
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder delete(Key key) {
-        return initDelete(key);
+        finalizeCurrentOperation();
+        return new ChainableNoBinsBuilder(session, operationSpecs, defaultWhereClause, txnToUse)
+                .initDelete(key);
     }
     
     /**
      * Chain a delete operation on multiple keys.
      * 
      * @param keys the keys to delete
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder delete(List<Key> keys) {
-        return initDelete(keys);
+        finalizeCurrentOperation();
+        return new ChainableNoBinsBuilder(session, operationSpecs, defaultWhereClause, txnToUse)
+                .initDelete(keys);
     }
     
     /**
@@ -304,7 +361,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder delete(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -316,22 +373,27 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain a touch operation on a single key.
+     * Returns a {@link ChainableNoBinsBuilder} since touch operations don't support bin modifications.
      * 
      * @param key the key to touch
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder touch(Key key) {
-        return initTouch(key);
+        finalizeCurrentOperation();
+        return new ChainableNoBinsBuilder(session, operationSpecs, defaultWhereClause, txnToUse)
+                .initTouch(key);
     }
     
     /**
      * Chain a touch operation on multiple keys.
      * 
      * @param keys the keys to touch
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder touch(List<Key> keys) {
-        return initTouch(keys);
+        finalizeCurrentOperation();
+        return new ChainableNoBinsBuilder(session, operationSpecs, defaultWhereClause, txnToUse)
+                .initTouch(keys);
     }
     
     /**
@@ -340,7 +402,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder touch(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -352,22 +414,27 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     
     /**
      * Chain an exists check operation on a single key.
+     * Returns a {@link ChainableNoBinsBuilder} since exists operations don't support bin modifications.
      * 
      * @param key the key to check
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder exists(Key key) {
-        return initExists(key);
+        finalizeCurrentOperation();
+        return new ChainableNoBinsBuilder(session, operationSpecs, defaultWhereClause, txnToUse)
+                .initExists(key);
     }
     
     /**
      * Chain an exists check operation on multiple keys.
      * 
      * @param keys the keys to check
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder exists(List<Key> keys) {
-        return initExists(keys);
+        finalizeCurrentOperation();
+        return new ChainableNoBinsBuilder(session, operationSpecs, defaultWhereClause, txnToUse)
+                .initExists(keys);
     }
     
     /**
@@ -376,7 +443,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param key1 first key
      * @param key2 second key
      * @param moreKeys additional keys
-     * @return this builder for method chaining
+     * @return ChainableNoBinsBuilder for method chaining
      */
     public ChainableNoBinsBuilder exists(Key key1, Key key2, Key... moreKeys) {
         List<Key> keys = new ArrayList<>();
@@ -428,80 +495,60 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     }
     
     // ========================================
-    // Delete-specific methods
-    // ========================================
-    
-    /**
-     * Specify whether delete operations should be durable.
-     * This only applies to delete operations and overrides the behavior setting.
-     * 
-     * @param durable true for durable delete, false for normal delete
-     * @return this builder for method chaining
-     */
-    public ChainableNoBinsBuilder durablyDelete(boolean durable) {
-        verifyState("setting durable delete");
-        if (currentSpec.opType != OpType.DELETE) {
-            throw new IllegalStateException("durablyDelete() can only be called on delete operations");
-        }
-        currentSpec.durablyDelete = durable;
-        return this;
-    }
-    
-    // ========================================
-    // Per-operation policies
+    // Per-operation policies (override parent to work with OperationSpec)
     // ========================================
     
     @Override
-    public ChainableNoBinsBuilder expireRecordAfter(Duration duration) {
+    public ChainableOperationBuilder expireRecordAfter(Duration duration) {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = duration.toSeconds();
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder expireRecordAfterSeconds(int expirationInSeconds) {
+    public ChainableOperationBuilder expireRecordAfterSeconds(int expirationInSeconds) {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = expirationInSeconds;
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder expireRecordAt(Date date) {
+    public ChainableOperationBuilder expireRecordAt(Date date) {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder expireRecordAt(LocalDateTime date) {
+    public ChainableOperationBuilder expireRecordAt(LocalDateTime date) {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = getExpirationInSecondsAndCheckValue(date);
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder withNoChangeInExpiration() {
+    public ChainableOperationBuilder withNoChangeInExpiration() {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = TTL_NO_CHANGE;
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder neverExpire() {
+    public ChainableOperationBuilder neverExpire() {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = TTL_NEVER_EXPIRE;
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder expiryFromServerDefault() {
+    public ChainableOperationBuilder expiryFromServerDefault() {
         verifyState("setting expiration");
         currentSpec.expirationInSeconds = TTL_SERVER_DEFAULT;
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder ensureGenerationIs(int generation) {
+    public ChainableOperationBuilder ensureGenerationIs(int generation) {
         verifyState("setting generation");
         if (generation <= 0) {
             throw new IllegalArgumentException("Generation must be greater than 0");
@@ -515,7 +562,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     // ========================================
     
     @Override
-    public ChainableNoBinsBuilder where(String dsl, Object... params) {
+    public ChainableOperationBuilder where(String dsl, Object... params) {
         verifyState("setting where clause");
         WhereClauseProcessor processor = createWhereClauseProcessor(false, dsl, params);
         if (processor != null) {
@@ -526,7 +573,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     }
     
     @Override
-    public ChainableNoBinsBuilder where(BooleanExpression dsl) {
+    public ChainableOperationBuilder where(BooleanExpression dsl) {
         verifyState("setting where clause");
         WhereClauseProcessor processor = WhereClauseProcessor.from(dsl);
         ParseResult parseResult = processor.process(getNamespaceFromKeys(currentSpec.keys), session);
@@ -535,7 +582,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     }
     
     @Override
-    public ChainableNoBinsBuilder where(PreparedDsl dsl, Object... params) {
+    public ChainableOperationBuilder where(PreparedDsl dsl, Object... params) {
         verifyState("setting where clause");
         WhereClauseProcessor processor = WhereClauseProcessor.from(false, dsl, params);
         ParseResult parseResult = processor.process(getNamespaceFromKeys(currentSpec.keys), session);
@@ -544,7 +591,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     }
     
     @Override
-    public ChainableNoBinsBuilder where(Exp exp) {
+    public ChainableOperationBuilder where(Exp exp) {
         verifyState("setting where clause");
         WhereClauseProcessor processor = WhereClauseProcessor.from(exp);
         ParseResult parseResult = processor.process(getNamespaceFromKeys(currentSpec.keys), session);
@@ -555,12 +602,14 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     /**
      * Set the default where clause for all operations in this batch that don't have their own where clause.
      * 
+     * <p>This filter is applied to operations that don't have an explicit {@code where()} clause.
+     * Operations with their own where clause will use their own filter instead.
+     * 
      * @param dsl the DSL filter expression
      * @param params parameters to substitute into the DSL
      * @return this builder for method chaining
-     * @see ChainableOperationBuilder#defaultWhere(String, Object...)
      */
-    public ChainableNoBinsBuilder defaultWhere(String dsl, Object... params) {
+    public ChainableOperationBuilder defaultWhere(String dsl, Object... params) {
         String namespace = currentSpec != null ? 
                 getNamespaceFromKeys(currentSpec.keys) :
                 (!operationSpecs.isEmpty() ? getNamespaceFromKeys(operationSpecs.get(0).keys) : null);
@@ -583,7 +632,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param dsl the boolean expression filter
      * @return this builder for method chaining
      */
-    public ChainableNoBinsBuilder defaultWhere(BooleanExpression dsl) {
+    public ChainableOperationBuilder defaultWhere(BooleanExpression dsl) {
         String namespace = currentSpec != null ? 
                 getNamespaceFromKeys(currentSpec.keys) :
                 (!operationSpecs.isEmpty() ? getNamespaceFromKeys(operationSpecs.get(0).keys) : null);
@@ -605,7 +654,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param params parameters to bind to the prepared DSL
      * @return this builder for method chaining
      */
-    public ChainableNoBinsBuilder defaultWhere(PreparedDsl dsl, Object... params) {
+    public ChainableOperationBuilder defaultWhere(PreparedDsl dsl, Object... params) {
         String namespace = currentSpec != null ? 
                 getNamespaceFromKeys(currentSpec.keys) :
                 (!operationSpecs.isEmpty() ? getNamespaceFromKeys(operationSpecs.get(0).keys) : null);
@@ -626,7 +675,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      * @param exp the expression filter
      * @return this builder for method chaining
      */
-    public ChainableNoBinsBuilder defaultWhere(Exp exp) {
+    public ChainableOperationBuilder defaultWhere(Exp exp) {
         String namespace = currentSpec != null ? 
                 getNamespaceFromKeys(currentSpec.keys) :
                 (!operationSpecs.isEmpty() ? getNamespaceFromKeys(operationSpecs.get(0).keys) : null);
@@ -642,32 +691,16 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     }
     
     @Override
-    public ChainableNoBinsBuilder failOnFilteredOut() {
+    public ChainableOperationBuilder failOnFilteredOut() {
         verifyState("setting failOnFilteredOut");
         currentSpec.failOnFilteredOut = true;
         return this;
     }
     
     @Override
-    public ChainableNoBinsBuilder respondAllKeys() {
+    public ChainableOperationBuilder respondAllKeys() {
         verifyState("setting respondAllKeys");
         currentSpec.respondAllKeys = true;
-        return this;
-    }
-    
-    // ========================================
-    // Transaction support
-    // ========================================
-    
-    @Override
-    public ChainableNoBinsBuilder notInAnyTransaction() {
-        this.txnToUse = null;
-        return this;
-    }
-    
-    @Override
-    public ChainableNoBinsBuilder inTransaction(Txn txn) {
-        this.txnToUse = txn;
         return this;
     }
     
@@ -676,8 +709,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
     // ========================================
     
     /**
-     * Execute all chained operations.
-     * Automatically chooses between single-key and batch execution based on the number of operations.
+     * Execute all chained operations as a single batch.
      * 
      * @return RecordStream containing the results of all operations
      */
@@ -688,62 +720,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
             throw new IllegalStateException("No operations specified");
         }
         
-        // Check if this is a simple single-operation, single-key case
-        // If so, delegate to the old builder for backward compatibility
-        if (isSingleKeyOperation()) {
-            return executeSingleKeyOperation();
-        }
-        
-        // Otherwise use batch execution
         return BatchExecutor.execute(session, operationSpecs, defaultWhereClause, txnToUse);
-    }
-    
-    /**
-     * Check if this is a single operation on a single key with no chaining and minimal settings.
-     * These can be executed more efficiently using the original point operation path.
-     */
-    private boolean isSingleKeyOperation() {
-        if (operationSpecs.size() != 1) {
-            return false;
-        }
-        
-        OperationSpec spec = operationSpecs.get(0);
-        return spec.keys.size() == 1 && 
-               spec.operations.isEmpty() && // No bin operations
-               spec.whereClause == null && // No operation-level where clause
-               defaultWhereClause == null; // No batch-level where clause
-    }
-    
-    /**
-     * Execute a single-key operation using the original OperationWithNoBinsBuilder path.
-     * This maintains backward compatibility and handles EXISTS, TOUCH, DELETE correctly.
-     */
-    private RecordStream executeSingleKeyOperation() {
-        OperationSpec spec = operationSpecs.get(0);
-        Key key = spec.keys.get(0);
-        
-        // Create an OperationWithNoBinsBuilder and configure it
-        OperationWithNoBinsBuilder builder = new OperationWithNoBinsBuilder(session, key, spec.opType);
-        
-        // Apply the spec's settings
-        if (spec.expirationInSeconds != Long.MIN_VALUE && spec.expirationInSeconds != 0) {
-            builder.expireRecordAfterSeconds((int) spec.expirationInSeconds);
-        }
-        if (spec.generation > 0) {
-            builder.ensureGenerationIs(spec.generation);
-        }
-        if (spec.failOnFilteredOut) {
-            builder.failOnFilteredOut();
-        }
-        if (spec.respondAllKeys) {
-            builder.respondAllKeys();
-        }
-        if (txnToUse != null) {
-            builder.inTransaction(txnToUse);
-        }
-        
-        // Execute and convert List<Boolean> to RecordStream
-        return builder.execute();
     }
     
     // ========================================
@@ -762,7 +739,7 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
      */
     private void verifyState(String operationContext) {
         if (currentSpec == null) {
-            throw new IllegalStateException("Must call delete/touch/exists before " + operationContext);
+            throw new IllegalStateException("Must call upsert/update/insert/replace before " + operationContext);
         }
     }
     
@@ -777,9 +754,97 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
         return keys.isEmpty() ? null : keys.get(0).namespace;
     }
     
-    private void transferState(ChainableOperationBuilder builder) {
-        // Transfer accumulated operations and state to the new builder
-        // This is done through package-private access
+    /**
+     * Inner class implementing BinsValuesOperations for the chainable context.
+     */
+    private class ChainableBinsValuesOperations implements BinsValuesOperations {
+        @Override
+        public Session getSession() {
+            return session;
+        }
+        
+        @Override
+        public OpType getOpType() {
+            return currentSpec != null ? currentSpec.opType : null;
+        }
+        
+        @Override
+        public int getNumKeys() {
+            return currentSpec != null ? currentSpec.keys.size() : 0;
+        }
+        
+        @Override
+        public boolean isMultiKey() {
+            return currentSpec != null && currentSpec.keys.size() > 1;
+        }
+        
+        @Override
+        public int getExpirationAsInt(long expirationInSeconds) {
+            return ChainableOperationBuilder.this.getExpirationAsInt(expirationInSeconds);
+        }
+        
+        @Override
+        public long getExpirationInSecondsAndCheckValue(Date date) {
+            return ChainableOperationBuilder.this.getExpirationInSecondsAndCheckValue(date);
+        }
+        
+        @Override
+        public long getExpirationInSecondsAndCheckValue(LocalDateTime dateTime) {
+            return ChainableOperationBuilder.this.getExpirationInSecondsAndCheckValue(dateTime);
+        }
+        
+        @Override
+        public WritePolicy getWritePolicy(Settings settings, int generation, OpType opType) {
+            WritePolicy result = settings.asWritePolicy();
+            result.generation = generation;
+            result.generationPolicy = generation > 0 ? 
+                    GenerationPolicy.EXPECT_GEN_EQUAL : 
+                    GenerationPolicy.NONE;
+            result.recordExistsAction = AbstractSessionOperationBuilder.recordExistsActionFromOpType(opType);
+            return result;
+        }
+        
+        @Override
+        public void showWarningsOnException(AerospikeException ae, Txn txn, Key key, int expiration) {
+            if (Log.warnEnabled()) {
+                if (ae.getResultCode() == ResultCode.FAIL_FORBIDDEN && expiration > 0) {
+                    Log.warn("Operation failed on server with FAIL_FORBIDDEN (22) and the record had "
+                            + "an expiry set in the operation. This is possibly caused by nsup being disabled. "
+                            + "See https://aerospike.com/docs/database/reference/error-codes for more information");
+                }
+                if (ae.getResultCode() == ResultCode.UNSUPPORTED_FEATURE) {
+                    if (txn != null && !session.isNamespaceSC(key.namespace)) {
+                        Log.warn(String.format("Namespace '%s' is involved in transaction, but it is not an SC namespace. "
+                                + "This will throw an Unsupported Server Feature exception", key.namespace));
+                    }
+                }
+            }
+        }
+        
+        @Override
+        public void executeAndPublishSingleOperation(
+                WritePolicy wp,
+                Key key,
+                Operation[] operations,
+                AsyncRecordStream asyncStream,
+                int index,
+                boolean stackTraceOnException) {
+            try {
+                Record record = session.getClient().operate(wp, key, operations);
+                if (currentSpec != null && currentSpec.respondAllKeys || record != null) {
+                    asyncStream.publish(new RecordResult(key, record, index));
+                }
+            } catch (AerospikeException ae) {
+                if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
+                    if (currentSpec != null && (currentSpec.failOnFilteredOut || currentSpec.respondAllKeys)) {
+                        asyncStream.publish(new RecordResult(key, AeroException.from(ae), index));
+                    }
+                    // Otherwise skip this record
+                } else {
+                    showWarningsOnException(ae, txnToUse, key, wp.expiration);
+                    asyncStream.publish(new RecordResult(key, AeroException.from(ae), index));
+                }
+            }
+        }
     }
 }
-

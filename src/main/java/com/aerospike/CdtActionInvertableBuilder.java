@@ -20,15 +20,15 @@ package com.aerospike;
  *   <li>INVERTED → removeAllOthers()</li>
  * </ul>
  */
-public interface CdtActionInvertableBuilder extends CdtActionNonInvertableBuilder {
-    public OperationBuilder getAllOtherValues();
-    public OperationBuilder getAllOtherKeys();
-    public OperationBuilder countAllOthers();
-    public OperationBuilder getAllOtherIndexes();
-    public OperationBuilder getAllOtherReverseIndexes();
-    public OperationBuilder getAllOtherRanks();
-    public OperationBuilder getAllOtherReverseRanks();
-    public OperationBuilder getAllOtherKeysAndValues();
-    public OperationBuilder removeAllOthers();
+public interface CdtActionInvertableBuilder<T extends AbstractOperationBuilder<T>> extends CdtActionNonInvertableBuilder<T> {
+    public T getAllOtherValues();
+    public T getAllOtherKeys();
+    public T countAllOthers();
+    public T getAllOtherIndexes();
+    public T getAllOtherReverseIndexes();
+    public T getAllOtherRanks();
+    public T getAllOtherReverseRanks();
+    public T getAllOtherKeysAndValues();
+    public T removeAllOthers();
 
 }

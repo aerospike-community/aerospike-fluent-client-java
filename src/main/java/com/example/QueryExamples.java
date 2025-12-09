@@ -135,7 +135,7 @@ public class QueryExamples {
             
             System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
             session.delete(customerDataSet.ids(2)).durablyDelete(false).execute();
-            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
+//            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
             
             DataSet users = DataSet.of("test", "users");
 
@@ -472,14 +472,14 @@ public class QueryExamples {
             }
             
             // TODO: Put transaction control into policies
-            session.doInTransaction(txnSession -> {
-                Optional<RecordResult> recResult = txnSession.query(customerDataSet.id(1)).execute().getFirst();
-                if (true) {
-                    txnSession.insert(customerDataSet.id(3));
-                }
-                txnSession.delete(customerDataSet.id(3));
-                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
-            });
+//            session.doInTransaction(txnSession -> {
+//                Optional<RecordResult> recResult = txnSession.query(customerDataSet.id(1)).execute().getFirst();
+//                if (true) {
+//                    txnSession.insert(customerDataSet.id(3));
+//                }
+//                txnSession.delete(customerDataSet.id(3));
+//                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
+//            });
             
             customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
             System.out.println(customers); 
@@ -575,6 +575,18 @@ public class QueryExamples {
                 System.out.println("---- End sort ---");
             }
 
+            RecordStream rsStream = session
+                    .update(customerDataSet.ids(1000, 1001))
+                        .bin("age").add(1)
+                        .bin("dob").setTo(new Date().getTime())
+                        .where("$.age > 100")
+                    .exists(customerDataSet.ids(1000,1001))
+                    .query(customerDataSet.ids(10,12))
+                    .delete(customerDataSet.id(1003))
+                    .execute();
+            System.out.println("Multi operations:");
+            print(rsStream);
+            
             // Insert then read back a customer with an address
             System.out.println("\n--- Object mapping test ----");
             Customer sampleCust = new Customer(999, "sample", 456, new Date(), new Address("123 Main St", "Denver", "CO", "USA", "80112"));

@@ -333,6 +333,13 @@ public class RecordStream implements Iterator<RecordResult>, Iterable<RecordResu
         return Optional.empty();
     }
 
+    public Optional<Boolean> getFirstBoolean() {
+        if (hasNext()) {
+            return Optional.of(next().asBoolean());
+        }
+        return Optional.empty();
+    }
+
     public static class ObjectWithMetadata<T> {
         private final int generation;
         private final int expiration;
