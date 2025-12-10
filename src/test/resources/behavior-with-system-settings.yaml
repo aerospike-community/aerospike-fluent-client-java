@@ -2,7 +2,7 @@
 # This file shows the complete structure expected by BehaviorYamlConfig.java
 
 behaviors:
-  - name: production
+  production:
     parent: DEFAULT
     sendKey: true
     useCompression: true
@@ -50,7 +50,7 @@ behaviors:
     info:
       abandonCallAfter: 5s
 
-  - name: highLoad
+  highLoad:
     parent: production
     
     # Override for high load scenarios
@@ -71,7 +71,7 @@ behaviors:
       recordQueueSize: 20000
       maxConcurrentServers: 8
 
-  - name: development
+  development:
     parent: DEFAULT
     sendKey: false
     useCompression: false
@@ -82,6 +82,7 @@ behaviors:
       waitForCallToComplete: 2s
 
 # System settings - applied at the cluster/client level
+# Each entry is a cluster name (use "default" for default settings)
 system:
   # Default settings applied to all clusters unless overridden
   default:
@@ -97,26 +98,25 @@ system:
     refresh:
       tendInterval: 1s
 
-  # Cluster-specific overrides
-  clusters:
-    production-cluster:
-      connections:
-        minimumConnectionsPerNode: 20
-        maximumConnectionsPerNode: 500
-        maximumSocketIdleTime: 180s
-      
-      circuitBreaker:
-        numTendIntervalsInErrorWindow: 3
-        maximumErrorsInErrorWindow: 100
-      
-      refresh:
-        tendInterval: 500ms
+  # Cluster-specific overrides (key = cluster name)
+  production-cluster:
+    connections:
+      minimumConnectionsPerNode: 20
+      maximumConnectionsPerNode: 500
+      maximumSocketIdleTime: 180s
     
-    staging-cluster:
-      connections:
-        minimumConnectionsPerNode: 5
-        maximumConnectionsPerNode: 100
-        maximumSocketIdleTime: 60s
-      
-      refresh:
-        tendInterval: 2s
+    circuitBreaker:
+      numTendIntervalsInErrorWindow: 3
+      maximumErrorsInErrorWindow: 100
+    
+    refresh:
+      tendInterval: 500ms
+  
+  staging-cluster:
+    connections:
+      minimumConnectionsPerNode: 5
+      maximumConnectionsPerNode: 100
+      maximumSocketIdleTime: 60s
+    
+    refresh:
+      tendInterval: 2s
