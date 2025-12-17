@@ -51,6 +51,10 @@ public class QueryExamples {
         }
     }
     
+    public static void udfExamples(Session session, DataSet dataSet) {
+//        session.call("myFunc").inModule("myModule").passing("fred", 17)
+//        session.execute(dataSet.id(1)).module("myModule").call()
+    }
     public static void main(String[] args) throws Exception {
         try (Cluster cluster = new ClusterDefinition("localhost", 3100)
                 .usingServicesAlternate()
@@ -186,7 +190,7 @@ public class QueryExamples {
                     .values("Alex", 67, "blonde", new Date().getTime())
                     .values("Sam", 24, "brown", new Date().getTime())
                     .expireAllRecordsAfter(Duration.ofDays(30))
-                    .execute();
+                    .executeAsync();
             values.forEach(kr -> System.out.printf("%s -> %s\n", kr.key(), kr.recordOrThrow()));
 
             for (int i = 0; i < 15; i++) {
@@ -511,7 +515,7 @@ public class QueryExamples {
                 .sum();
             System.out.println("\n\nSorting customers by Name with a where clause using NavigatableRecordStream");
             customers = session.query(customerDataSet)
-                    .where("$.name == 'Tim' and $.age > 30 and $.map.{'*'}.[13].")
+                    .where("$.name == 'Tim' and $.age > 30")
                     .limit(1000)
                     .execute()
                     .asNavigatableStream()

@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import javax.net.ssl.SSLContext;
+
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.Host;
 import com.aerospike.client.IAerospikeClient;
@@ -317,7 +319,7 @@ public class ClusterDefinition {
             
             
             // Use custom SSLContext if available (from PEM files, key stores, etc.)
-            javax.net.ssl.SSLContext sslContext = tlsBuilder.createSslContext();
+            SSLContext sslContext = tlsBuilder.createSslContext();
             if (sslContext != null) {
                 policy.tlsPolicy.context = sslContext;
             }

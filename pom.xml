@@ -35,11 +35,6 @@
 			<version>1.18.42</version>
 			<scope>provided</scope>
 		</dependency>
-		<dependency>
-		    <groupId>io.github.hakky54</groupId>
-		    <artifactId>sslcontext-kickstart-for-pem</artifactId>
-		    <version>8.1.1</version>
-		</dependency>
 		<!-- Test dependencies -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
