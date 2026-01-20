@@ -5,6 +5,10 @@ import java.util.List;
 
 import com.aerospike.client.Bin;
 import com.aerospike.client.Operation;
+import com.aerospike.client.exp.Exp;
+import com.aerospike.dsl.ParseResult;
+import com.aerospike.query.PreparedDsl;
+import com.aerospike.query.WhereClauseProcessor;
 
 /**
  * Abstract base class for operation builders that support bin-level operations.
@@ -90,6 +94,41 @@ public abstract class AbstractOperationBuilder<T extends AbstractOperationBuilde
     protected T addOp(Operation op) {
         this.ops.add(op);
         return self();
+    }
+    
+    // ==================================================================
+    // Expression Parsing - used by BinBuilder for expression operations
+    // ==================================================================
+    
+    /**
+     * Parse a DSL string expression into an Aerospike Exp.
+     * Used internally by BinBuilder for expression operations.
+     * 
+     * @param dsl the DSL expression string
+     * @param params optional parameters for string formatting
+     * @return the parsed Exp object
+     */
+    protected Exp parseExpression(String dsl, Object... params) {
+        String formattedDsl = params.length > 0 ? String.format(dsl, params) : dsl;
+        WhereClauseProcessor processor = WhereClauseProcessor.from(false, formattedDsl);
+        // Use a default namespace - expression operations don't need index context
+        ParseResult result = processor.process(null, session);
+        return result.getExp();
+    }
+    
+    /**
+     * Parse a PreparedDsl with parameters into an Aerospike Exp.
+     * Used internally by BinBuilder for expression operations.
+     * 
+     * @param dsl the prepared DSL
+     * @param params the parameters for the prepared DSL
+     * @return the parsed Exp object
+     */
+    protected Exp parseExpression(PreparedDsl dsl, Object... params) {
+        // Use WhereClauseProcessor which has access to formValue
+        WhereClauseProcessor processor = WhereClauseProcessor.from(false, dsl, params);
+        ParseResult result = processor.process(null, session);
+        return result.getExp();
     }
 }
 

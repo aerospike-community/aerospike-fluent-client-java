@@ -17,8 +17,6 @@ import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.SystemSettings;
-import com.aerospike.SystemSettingsRegistry;
 import com.aerospike.TypeSafeDataSet;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
@@ -49,6 +47,21 @@ public class QueryExamples {
             RecordResult key = recordStream.next();
             System.out.printf("%5d - Key: %s, Value: %s\n", (++count), key.key(), key);
         }
+    }
+    
+    public static void readWriteExpressionsExamples(Session session, DataSet dataSet) {
+        System.out.println("Performing an operation expression");
+        session.upsert(dataSet.id(1))
+            .bin("a").setTo(12)
+            .bin("b").setTo(9)
+            .bin("c").setTo(5)
+            .execute();
+        System.out.println(session.query(dataSet.id(1)).execute().getFirst());
+        System.out.println(session.upsert(dataSet.id(1))
+            .bin("result").writeExp("when($.age > 19 => 15, default => 20)")     // Write expresssion
+            .bin("fakeBin").readExp("$.a + $.b + $.c")   // ReadExpression
+            .execute().getFirst());
+        System.out.println(session.query(dataSet.id(1)).execute().getFirst());
     }
     
     public static void udfExamples(Session session, DataSet dataSet) {
@@ -137,6 +150,7 @@ public class QueryExamples {
                     .values("Jane", 46)
                     .execute();
             
+            readWriteExpressionsExamples(session, customerDataSet);
             System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
             session.delete(customerDataSet.ids(2)).durablyDelete(false).execute();
 //            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
@@ -148,7 +162,7 @@ public class QueryExamples {
                     .bin("age").setTo(342)
                     .execute();
             System.out.println(result.getFirst());
-            
+                        
             session.upsert(customerDataSet.ids(81, 82))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(343)
@@ -476,14 +490,14 @@ public class QueryExamples {
             }
             
             // TODO: Put transaction control into policies
-//            session.doInTransaction(txnSession -> {
-//                Optional<RecordResult> recResult = txnSession.query(customerDataSet.id(1)).execute().getFirst();
-//                if (true) {
-//                    txnSession.insert(customerDataSet.id(3));
-//                }
-//                txnSession.delete(customerDataSet.id(3));
-//                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
-//            });
+            session.doInTransaction(txnSession -> {
+                Optional<RecordResult> recResult = txnSession.query(customerDataSet.id(1)).execute().getFirst();
+                if (true) {
+                    txnSession.insert(customerDataSet.id(3));
+                }
+                txnSession.delete(customerDataSet.id(3));
+                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
+            });
             
             customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
             System.out.println(customers); 

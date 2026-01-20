@@ -4,12 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
+import java.util.function.Consumer;
 
 import com.aerospike.CdtGetOrRemoveBuilder.CdtOperation;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Value;
 import com.aerospike.client.cdt.ListOrder;
 import com.aerospike.client.cdt.MapOrder;
+import com.aerospike.client.exp.Exp;
+import com.aerospike.client.exp.ExpOperation;
+import com.aerospike.client.exp.ExpReadFlags;
+import com.aerospike.client.exp.ExpWriteFlags;
+import com.aerospike.dslobjects.DslExpression;
+import com.aerospike.query.PreparedDsl;
 
 public class BinBuilder<T extends AbstractOperationBuilder<T>> extends AbstractCdtBuilder<T> {
     public BinBuilder(T opBuilder, String binName) {
@@ -127,6 +134,294 @@ public class BinBuilder<T extends AbstractOperationBuilder<T>> extends AbstractC
      */
     public T add(double amount) {
         return opBuilder.add(new Bin(binName, amount));
+    }
+    
+    // ==================================================================
+    // Expression Operations
+    // ==================================================================
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin.
+     * 
+     * <p>The expression is specified using the DSL string syntax. The result of
+     * evaluating the expression will be returned in this bin's name.</p>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * session.update(dataSet.id(1))
+     *     .bin("result").readExp("$.a + $.b")
+     *     .execute();
+     * }</pre>
+     * 
+     * @param dsl the DSL expression string
+     * @param params optional parameters for DSL string formatting
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(String dsl, Object... params) {
+        Exp exp = opBuilder.parseExpression(dsl, params);
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp), ExpReadFlags.DEFAULT));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin, with options.
+     * 
+     * <p>The expression is specified using the DSL string syntax. The options lambda
+     * allows configuring behavior for error handling.</p>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * session.update(dataSet.id(1))
+     *     .bin("result").readExp("$.a + $.b", opts -> opts
+     *         .returnNilForMissingBins()
+     *         .ignoreExpressionErrors()
+     *     )
+     *     .execute();
+     * }</pre>
+     * 
+     * @param dsl the DSL expression string
+     * @param options lambda to configure read options
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(String dsl, Consumer<ExpReadOptions> options) {
+        Exp exp = opBuilder.parseExpression(dsl);
+        ExpReadOptions opts = new ExpReadOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp), opts.getFlags()));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin.
+     * 
+     * <p>The expression is specified using a DslExpression object built programmatically.</p>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * session.update(dataSet.id(1))
+     *     .bin("isAdult").readExp(Bins.intBin("age").gt(18))
+     *     .execute();
+     * }</pre>
+     * 
+     * @param exp the DSL expression object
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(DslExpression exp) {
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp.toAerospikeExp()), ExpReadFlags.DEFAULT));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin, with options.
+     * 
+     * <p>The expression is specified using a DslExpression object built programmatically.</p>
+     * 
+     * @param exp the DSL expression object
+     * @param options lambda to configure read options
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(DslExpression exp, Consumer<ExpReadOptions> options) {
+        ExpReadOptions opts = new ExpReadOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp.toAerospikeExp()), opts.getFlags()));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin.
+     * 
+     * <p>The expression is specified using a PreparedDsl with parameters.</p>
+     * 
+     * @param dsl the prepared DSL
+     * @param params the parameters for the prepared DSL
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(PreparedDsl dsl, Object... params) {
+        Exp exp = opBuilder.parseExpression(dsl, params);
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp), ExpReadFlags.DEFAULT));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin, with options.
+     * 
+     * <p>The expression is specified using a PreparedDsl with parameters.</p>
+     * 
+     * @param dsl the prepared DSL
+     * @param options lambda to configure read options
+     * @param params the parameters for the prepared DSL
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(PreparedDsl dsl, Consumer<ExpReadOptions> options, Object... params) {
+        Exp exp = opBuilder.parseExpression(dsl, params);
+        ExpReadOptions opts = new ExpReadOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp), opts.getFlags()));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin.
+     * 
+     * <p>The expression is specified using a native Aerospike Exp object.</p>
+     * 
+     * @param exp the Aerospike expression
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(Exp exp) {
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp), ExpReadFlags.DEFAULT));
+    }
+    
+    /**
+     * Read the result of evaluating a server-side expression into this bin, with options.
+     * 
+     * <p>The expression is specified using a native Aerospike Exp object.</p>
+     * 
+     * @param exp the Aerospike expression
+     * @param options lambda to configure read options
+     * @return the parent operation builder for continued chaining
+     */
+    public T readExp(Exp exp, Consumer<ExpReadOptions> options) {
+        ExpReadOptions opts = new ExpReadOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.read(binName, Exp.build(exp), opts.getFlags()));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin.
+     * 
+     * <p>The expression is specified using the DSL string syntax. The result of
+     * evaluating the expression will be stored in this bin.</p>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * session.update(dataSet.id(1))
+     *     .bin("total").writeExp("$.price * $.quantity")
+     *     .execute();
+     * }</pre>
+     * 
+     * @param dsl the DSL expression string
+     * @param params optional parameters for DSL string formatting
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(String dsl, Object... params) {
+        Exp exp = opBuilder.parseExpression(dsl, params);
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp), ExpWriteFlags.DEFAULT));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin, with options.
+     * 
+     * <p>The expression is specified using the DSL string syntax. The options lambda
+     * allows configuring behavior for error handling and bin existence policies.</p>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * session.update(dataSet.id(1))
+     *     .bin("computed").writeExp("$.a * 2", opts -> opts
+     *         .onlyWhen(BinExistsPolicy.CREATE_ONLY)
+     *         .ignoreExpressionErrors()
+     *     )
+     *     .execute();
+     * }</pre>
+     * 
+     * @param dsl the DSL expression string
+     * @param options lambda to configure write options
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(String dsl, Consumer<ExpWriteOptions> options) {
+        Exp exp = opBuilder.parseExpression(dsl);
+        ExpWriteOptions opts = new ExpWriteOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp), opts.getFlags()));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin.
+     * 
+     * <p>The expression is specified using a DslExpression object built programmatically.</p>
+     * 
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * session.update(dataSet.id(1))
+     *     .bin("status").writeExp(
+     *         Bins.intBin("balance").lt(0).ifTrue("overdrawn").otherwise("ok")
+     *     )
+     *     .execute();
+     * }</pre>
+     * 
+     * @param exp the DSL expression object
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(DslExpression exp) {
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp.toAerospikeExp()), ExpWriteFlags.DEFAULT));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin, with options.
+     * 
+     * <p>The expression is specified using a DslExpression object built programmatically.</p>
+     * 
+     * @param exp the DSL expression object
+     * @param options lambda to configure write options
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(DslExpression exp, Consumer<ExpWriteOptions> options) {
+        ExpWriteOptions opts = new ExpWriteOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp.toAerospikeExp()), opts.getFlags()));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin.
+     * 
+     * <p>The expression is specified using a PreparedDsl with parameters.</p>
+     * 
+     * @param dsl the prepared DSL
+     * @param params the parameters for the prepared DSL
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(PreparedDsl dsl, Object... params) {
+        Exp exp = opBuilder.parseExpression(dsl, params);
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp), ExpWriteFlags.DEFAULT));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin, with options.
+     * 
+     * <p>The expression is specified using a PreparedDsl with parameters.</p>
+     * 
+     * @param dsl the prepared DSL
+     * @param options lambda to configure write options
+     * @param params the parameters for the prepared DSL
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(PreparedDsl dsl, Consumer<ExpWriteOptions> options, Object... params) {
+        Exp exp = opBuilder.parseExpression(dsl, params);
+        ExpWriteOptions opts = new ExpWriteOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp), opts.getFlags()));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin.
+     * 
+     * <p>The expression is specified using a native Aerospike Exp object.</p>
+     * 
+     * @param exp the Aerospike expression
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(Exp exp) {
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp), ExpWriteFlags.DEFAULT));
+    }
+    
+    /**
+     * Write the result of evaluating a server-side expression to this bin, with options.
+     * 
+     * <p>The expression is specified using a native Aerospike Exp object.</p>
+     * 
+     * @param exp the Aerospike expression
+     * @param options lambda to configure write options
+     * @return the parent operation builder for continued chaining
+     */
+    public T writeExp(Exp exp, Consumer<ExpWriteOptions> options) {
+        ExpWriteOptions opts = new ExpWriteOptions();
+        options.accept(opts);
+        return opBuilder.addOp(ExpOperation.write(binName, Exp.build(exp), opts.getFlags()));
     }
     
     // ==================================================================
