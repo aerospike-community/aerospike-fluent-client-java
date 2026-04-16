@@ -1,8 +1,8 @@
 # Aerospike New Client API
 
 > [!NOTE]
-> This is a developer preview, not yet ready for production use, but with future releases planned. We encourage feedback from the Aerospike 
-> developer community through GitHub issues.
+> This repository is obsolete and will be removed shortly. Use [the Java SDK](https://github.com/aerospike/aerospike-client-java-sdk) which is a superset of the functionality
+> in this repository instead.
 
 A higher-level API for Aerospike that provides type-safe, fluent interfaces for working with Aerospike databases.
 
