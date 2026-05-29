@@ -283,13 +283,13 @@ private static byte[] uuidToBytes(UUID uuid) {
 }
 ```
 
-## TypeSafeDataSet
+## TypedDataSet
 
-For working with Java objects, use `TypeSafeDataSet`:
+For working with Java objects, use `TypedDataSet`:
 
 ```java
-TypeSafeDataSet<Customer> customers = 
-    TypeSafeDataSet.of("test", "customers", Customer.class);
+TypedDataSet<Customer> customers = 
+    TypedDataSet.of("test", "customers", Customer.class);
 
 // Automatically extracts ID from object
 session.upsert(customers)

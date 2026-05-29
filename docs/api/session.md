@@ -36,11 +36,11 @@ Session customSession = cluster.createSession(customBehavior);
 
 These methods return an `OperationBuilder` for constructing CUD (Create, Update, Delete) operations.
 
-- `upsert(Key)` / `upsert(DataSet)` / `upsert(TypeSafeDataSet<T>)`
-- `insertInto(Key)` / `insertInto(DataSet)` / `insertInto(TypeSafeDataSet<T>)`
-- `update(Key)` / `update(DataSet)` / `update(TypeSafeDataSet<T>)`
-- `touch(Key)` / `touch(DataSet)` / `touch(TypeSafeDataSet<T>)`
-- `delete(Key)` / `delete(List<Key>)`
+- `upsert(Key)` / `upsert(DataSet)` / `upsert(TypedDataSet<T>)`
+- `insert(Key)` / `insert(DataSet)` / `insert(TypedDataSet<T>)` / `insert(TypedKey<T>)` / `insertKeys(List<TypedKey<T>>)`
+- `update(Key)` / `update(DataSet)` / `update(TypedDataSet<T>)` / `update(TypedKey<T>)` / `updateKeys(List<TypedKey<T>>)`
+- `touch(Key)` / `touch(DataSet)` / `touch(TypedDataSet<T>)`
+- `delete(Key)` / `delete(List<Key>)` / `delete(TypedKey<T>)` / `deleteKeys(List<TypedKey<T>>)`
 
 **Example**:
 ```java
@@ -51,22 +51,31 @@ session.upsert(users.id("alice"))
 
 ### 2. Read Operations
 
-These methods return a `QueryBuilder` for constructing R (Read) operations.
+These methods return a `QueryBuilder` or `TypedQueryBuilder<T>` for constructing read operations.
 
 - `query(Key)` / `query(List<Key>)`
-- `query(DataSet)` / `query(TypeSafeDataSet<T>)`
+- `query(DataSet)` → `QueryBuilder` → `RecordStream`
+- `query(TypedDataSet<T>)` / `query(TypedKey<T>)` / `query(TypedKey<T>…)` / `queryTypedKeys(List<TypedKey<T>>)` → `TypedQueryBuilder<T>` → `TypedRecordStream<T>`
 
-**Example**:
+**Example (untyped index query)**:
 ```java
 RecordStream results = session.query(users)
     .where("$.city == 'London'")
     .execute();
 ```
 
+**Example (typed dataset query)**:
+```java
+TypedRecordStream<Customer> typed = session.query(customerDataSet)
+    .where("$.tier == 'gold'")
+    .execute();
+List<Customer> rows = typed.toObjectList();
+```
+
 ### 3. Administrative Operations
 
 - `info()`: Returns an `InfoCommands` interface for executing info commands against the cluster.
-- `truncate(DataSet)`: Deletes all records in a set.
+- `truncate(DataSet)` / `truncate(TypedDataSet<?>)`: Deletes all records in a set.
 
 **Example**:
 ```java
@@ -92,8 +101,8 @@ session.upsert(users.id("alice"));
 // For multiple keys (batch operation)
 session.upsert(users.ids("alice", "bob"));
 
-// For a TypeSafeDataSet (for object mapping)
-session.upsert(TypeSafeDataSet.of("test", "users", User.class));
+// For a TypedDataSet (for object mapping)
+session.upsert(TypedDataSet.of("test", "users", User.class));
 ```
 
 ### `query(...)`
@@ -161,7 +170,7 @@ public class DataService {
     }
     
     public void updateUser(User user) {
-        TypeSafeDataSet<User> users = TypeSafeDataSet.of("app", "users", User.class);
+        TypedDataSet<User> users = TypedDataSet.of("app", "users", User.class);
         session.upsert(users).object(user).execute();
     }
     

@@ -1,7 +1,5 @@
 package com.aerospike.query;
 
-import java.util.List;
-
 import com.aerospike.DataSet;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;

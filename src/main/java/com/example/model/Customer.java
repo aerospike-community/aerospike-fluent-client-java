@@ -2,11 +2,21 @@ package com.example.model;
 
 import java.util.Date;
 
+import com.aerospike.mapper.annotations.AerospikeEmbed;
+import com.aerospike.mapper.annotations.AerospikeKey;
+import com.aerospike.mapper.annotations.AerospikeRecord;
+
+import lombok.Data;
+
+@Data
+@AerospikeRecord(namespace = "test", set = "cust")
 public class Customer {
+    @AerospikeKey
     private long id;
     private String name;
     private int age;
     private Date dob;
+    @AerospikeEmbed
     private Address address;
     
     public Customer() {

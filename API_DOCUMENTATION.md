@@ -137,9 +137,9 @@ OperationBuilder update(Key key)
 OperationBuilder delete(Key key)
 
 // Object operations
-OperationObjectBuilder<T> upsert(TypeSafeDataSet<T> dataSet)
-OperationObjectBuilder<T> insert(TypeSafeDataSet<T> dataSet)
-OperationObjectBuilder<T> update(TypeSafeDataSet<T> dataSet)
+OperationObjectBuilder<T> upsert(TypedDataSet<T> dataSet)
+OperationObjectBuilder<T> insert(TypedDataSet<T> dataSet)
+OperationObjectBuilder<T> update(TypedDataSet<T> dataSet)
 
 // Multi-key operations
 MultiValueBuilder upsert(List<Key> keys)
@@ -182,12 +182,12 @@ List<Key> ids(long... ids)
 List<Key> ids(List<?> ids)
 ```
 
-### TypeSafeDataSet
+### TypedDataSet
 
-The `TypeSafeDataSet` class provides type-safe operations for Java objects.
+The `TypedDataSet` class provides type-safe operations for Java objects.
 
 ```java
-TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
+TypedDataSet<Customer> customerDataSet = TypedDataSet.of("test", "person", Customer.class);
 ```
 
 ### OperationBuilder
@@ -475,10 +475,10 @@ cluster.setRecordMappingFactory(new DefaultRecordMappingFactory(Map.of(
 )));
 
 // Use with typed datasets
-TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
+TypedDataSet<Customer> customerDataSet = TypedDataSet.of("test", "person", Customer.class);
 
 // Object operations
-session.insertInto(customerDataSet).object(customer).execute();
+session.insert(customerDataSet).object(customer).execute();
 Customer result = session.query(customerDataSet.id(1)).execute().toObjectLlist(customerMapper).get(0);
 ```
 
@@ -702,11 +702,11 @@ try (Cluster cluster = new ClusterDefinition("localhost", 3100)
     Session session = cluster.createSession(behavior);
     
     // Create datasets
-    TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
+    TypedDataSet<Customer> customerDataSet = TypedDataSet.of("test", "person", Customer.class);
     
     // Insert data
     Customer customer = new Customer(1L, "John Doe", 30, new Date());
-    session.insertInto(customerDataSet).object(customer).execute();
+    session.insert(customerDataSet).object(customer).execute();
     
     // Query data
     RecordStream results = session.query(customerDataSet)

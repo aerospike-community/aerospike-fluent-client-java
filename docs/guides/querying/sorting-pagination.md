@@ -152,12 +152,12 @@ import java.util.List;
 
 public class UserDirectory {
     private final Session session;
-    private final TypeSafeDataSet<User> users;
+    private final TypedDataSet<User> users;
     private final RecordMapper<User> userMapper;
 
     public UserDirectory(Session session) {
         this.session = session;
-        this.users = TypeSafeDataSet.of("test", "users", User.class);
+        this.users = TypedDataSet.of("test", "users", User.class);
         this.userMapper = new UserMapper(); // Assume UserMapper is implemented
     }
 

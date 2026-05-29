@@ -21,12 +21,12 @@ A complete example showing:
 ```java
 public class ProductCatalog {
     private final Session session;
-    private final TypeSafeDataSet<Product> products;
+    private final TypedDataSet<Product> products;
     private final ProductMapper mapper;
     
     public ProductCatalog(Session session) {
         this.session = session;
-        this.products = TypeSafeDataSet.of("ecommerce", "products", Product.class);
+        this.products = TypedDataSet.of("ecommerce", "products", Product.class);
         this.mapper = new ProductMapper();
     }
     

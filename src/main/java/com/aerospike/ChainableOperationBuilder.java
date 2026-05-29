@@ -493,7 +493,71 @@ public class ChainableOperationBuilder extends AbstractOperationBuilder<Chainabl
         keys.addAll(Arrays.asList(moreKeys));
         return query(keys);
     }
-    
+
+    public ChainableOperationBuilder upsert(TypedKey<?> key) {
+        return upsert(key.getNativeKey());
+    }
+
+    public ChainableOperationBuilder upsertKeys(List<? extends TypedKey<?>> keys) {
+        return upsert(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableOperationBuilder insert(TypedKey<?> key) {
+        return insert(key.getNativeKey());
+    }
+
+    public ChainableOperationBuilder insertKeys(List<? extends TypedKey<?>> keys) {
+        return insert(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableOperationBuilder update(TypedKey<?> key) {
+        return update(key.getNativeKey());
+    }
+
+    public ChainableOperationBuilder updateKeys(List<? extends TypedKey<?>> keys) {
+        return update(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableOperationBuilder replace(TypedKey<?> key) {
+        return replace(key.getNativeKey());
+    }
+
+    public ChainableOperationBuilder replaceKeys(List<? extends TypedKey<?>> keys) {
+        return replace(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableNoBinsBuilder delete(TypedKey<?> key) {
+        return delete(key.getNativeKey());
+    }
+
+    public ChainableNoBinsBuilder deleteKeys(List<? extends TypedKey<?>> keys) {
+        return delete(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableNoBinsBuilder touch(TypedKey<?> key) {
+        return touch(key.getNativeKey());
+    }
+
+    public ChainableNoBinsBuilder touchKeys(List<? extends TypedKey<?>> keys) {
+        return touch(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableNoBinsBuilder exists(TypedKey<?> key) {
+        return exists(key.getNativeKey());
+    }
+
+    public ChainableNoBinsBuilder existsKeys(List<? extends TypedKey<?>> keys) {
+        return exists(Session.nativeKeysFromTyped(keys));
+    }
+
+    public ChainableQueryBuilder query(TypedKey<?> key) {
+        return query(key.getNativeKey());
+    }
+
+    public ChainableQueryBuilder queryTypedKeys(List<? extends TypedKey<?>> keys) {
+        return query(Session.nativeKeysFromTyped(keys));
+    }
+
     // ========================================
     // Per-operation policies (override parent to work with OperationSpec)
     // ========================================

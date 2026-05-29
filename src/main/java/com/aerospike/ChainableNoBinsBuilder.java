@@ -6,11 +6,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.ResultCode;
 import com.aerospike.client.Txn;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.exp.Expression;
@@ -190,6 +187,14 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
         keys.add(key2);
         keys.addAll(Arrays.asList(moreKeys));
         return update(keys);
+    }
+
+    public ChainableOperationBuilder update(TypedKey<?> key) {
+        return update(key.getNativeKey());
+    }
+
+    public ChainableOperationBuilder updateKeys(List<? extends TypedKey<?>> keys) {
+        return update(Session.nativeKeysFromTyped(keys));
     }
     
     /**
@@ -425,6 +430,14 @@ public class ChainableNoBinsBuilder extends AbstractSessionOperationBuilder<Chai
         keys.add(key2);
         keys.addAll(Arrays.asList(moreKeys));
         return query(keys);
+    }
+
+    public ChainableQueryBuilder query(TypedKey<?> key) {
+        return query(key.getNativeKey());
+    }
+
+    public ChainableQueryBuilder queryTypedKeys(List<? extends TypedKey<?>> keys) {
+        return query(Session.nativeKeysFromTyped(keys));
     }
     
     // ========================================

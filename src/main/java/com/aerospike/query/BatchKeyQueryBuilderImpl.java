@@ -18,9 +18,9 @@ import com.aerospike.client.exp.Exp;
 import com.aerospike.client.exp.Expression;
 import com.aerospike.client.policy.BatchPolicy;
 import com.aerospike.dsl.ParseResult;
+import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Behavior.OpKind;
 import com.aerospike.policy.Behavior.OpShape;
-import com.aerospike.policy.Behavior.Mode;
 import com.aerospike.policy.Settings;
 
 class BatchKeyQueryBuilderImpl extends QueryImpl {

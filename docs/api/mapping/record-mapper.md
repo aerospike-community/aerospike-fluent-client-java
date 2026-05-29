@@ -18,12 +18,25 @@ An implementation of `RecordMapper` is responsible for three key tasks:
 ```java
 public interface RecordMapper<T> {
     T fromMap(Map<String, Object> map, Key recordKey, int generation);
+    default T fromMap(Map<String, Object> map, Key recordKey, int generation, RecordReadContext<T> ctx) {
+        return fromMap(map, recordKey, generation);
+    }
     Map<String, Value> toMap(T element);
     Object id(T element);
 }
 ```
 
+On typed read paths (`TypedRecordStream`, `TypedNavigatableRecordStream`, `MixedTypedBatchReadResult#toObjects`), the client invokes the **four-argument** `fromMap` so mappers can use **`RecordReadContext`**: `getSession()`, `getEntityType()`, and `getRecordMappingFactory()`. Override this default when you need dependent loads or other session-scoped behavior.
+
 ## Methods
+
+### `fromMap(Map<String, Object> map, Key recordKey, int generation, RecordReadContext<T> ctx)`
+
+Optional overload (default delegates to the three-argument form). Used automatically when mapping from **`TypedRecordStream`** and related APIs.
+
+See **[Typed query and mapping](../../guides/object-mapping/typed-query-and-mapping.md)**.
+
+---
 
 ### `fromMap(Map<String, Object> map, Key recordKey, int generation)`
 
@@ -114,7 +127,7 @@ public class CustomerMapper implements RecordMapper<Customer> {
 ## Related Classes
 
 - **[`RecordMappingFactory`](./record-mapping-factory.md)**: A factory for providing `RecordMapper` instances.
-- **[`TypeSafeDataSet`](../operations/typesafe-dataset.md)**: A `DataSet` that uses a `RecordMapper` for type-safe operations.
+- **[`TypedDataSet`](../operations/typed-dataset.md)**: A `DataSet` that uses a `RecordMapper` for type-safe operations.
 
 ## See Also
 

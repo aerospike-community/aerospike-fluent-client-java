@@ -374,18 +374,18 @@ public class ObjectBuilder<T> {
         return operations;
     }
     
-    private Key getKeyForElement(RecordMapper<T> mapper, T element) {
+    private TypedKey<T> getKeyForElement(RecordMapper<T> mapper, T element) {
         Object id = mapper.id(element);
         return this.opBuilder.getDataSet().idForObject(id);
     }
     
-    private RecordStream executeSingle(T element) {
+    private TypedRecordStream<T> executeSingle(T element) {
         RecordMapper<T> recordMapper = getMapper(element);
-        Key key = getKeyForElement(recordMapper, element); 
+        TypedKey<T> key = getKeyForElement(recordMapper, element); 
         Operation[] operations = operationsForElement(recordMapper, element);
         OpKind type = OperationBuilder.areOperationsRetryable(operations) ? OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
         WritePolicy wp = this.opBuilder.getSession().getBehavior()
-                .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace))
+                .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.getNamespace()))
                 .asWritePolicy();
 
         wp.txn = this.txnToUse;
@@ -400,45 +400,48 @@ public class ObjectBuilder<T> {
         
         // Apply where clause if present
         if (opBuilder.getDsl() != null) {
-            ParseResult parseResult = opBuilder.getDsl().process(key.namespace, opBuilder.getSession());
+            ParseResult parseResult = opBuilder.getDsl().process(key.getNamespace(), opBuilder.getSession());
             wp.filterExp = Exp.build(parseResult.getExp());
         }
         
         try {
             Record record = this.opBuilder.getSession().getClient().operate(
                     wp,
-                    key,
+                    key.getNativeKey(),
                     operations
                 );
                     
-            return new RecordStream(key, record);
+            return new TypedRecordStream<>(this.opBuilder.getSession(), key.getClazz(),
+                    new RecordStream(key.getNativeKey(), record));
         } catch (AerospikeException ae) {
             if (ae.getResultCode() == ResultCode.FILTERED_OUT) {
                 if (opBuilder.isFailOnFilteredOut() || opBuilder.isRespondAllKeys()) {
                     AeroException ae1 = AeroException.from(ae);
-                    return new RecordStream(new RecordResult(key, ae1, 0));
+                    return new TypedRecordStream<>(this.opBuilder.getSession(), key.getClazz(),
+                            new RecordStream(new RecordResult(key.getNativeKey(), ae1, 0)));
                 }
                 // Otherwise return empty stream
-                return new RecordStream();
+                return new TypedRecordStream<>(this.opBuilder.getSession(), opBuilder.getDataSet().getClazz(),
+                        new RecordStream());
             }
             throw ae;
         }
     }
     
-    private RecordStream executeSingleAsync(T element) {
+    private TypedRecordStream<T> executeSingleAsync(T element) {
         // Single element: use async execution with virtual thread
         AsyncRecordStream asyncStream = new AsyncRecordStream(1);
         
         Thread.startVirtualThread(() -> {
             try {
                 RecordMapper<T> recordMapper = getMapper(element);
-                Key key = getKeyForElement(recordMapper, element);
+                TypedKey<T> key = getKeyForElement(recordMapper, element);
                 Operation[] operations = operationsForElement(recordMapper, element);
                 
                 OpKind type = OperationBuilder.areOperationsRetryable(operations) ? 
                         OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
                 WritePolicy wp = this.opBuilder.getSession().getBehavior()
-                        .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace))
+                        .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.getNamespace()))
                         .asWritePolicy();
 
                 wp.txn = this.txnToUse;
@@ -453,18 +456,18 @@ public class ObjectBuilder<T> {
                 
                 // Apply where clause if present
                 if (opBuilder.getDsl() != null) {
-                    ParseResult parseResult = opBuilder.getDsl().process(key.namespace, opBuilder.getSession());
+                    ParseResult parseResult = opBuilder.getDsl().process(key.getNamespace(), opBuilder.getSession());
                     wp.filterExp = Exp.build(parseResult.getExp());
                 }
                 
                 try {
-                    Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
+                    Record record = this.opBuilder.getSession().getClient().operate(wp, key.getNativeKey(), operations);
                     if (opBuilder.isRespondAllKeys() || record != null) {
-                        asyncStream.publish(new RecordResult(key, record, 0)); // Single key operation, index = 0
+                        asyncStream.publish(new RecordResult(key.getNativeKey(), record, 0)); // Single key operation, index = 0
                     }
                 } catch (AerospikeException ae) {
                     if (shouldPublish(ae, opBuilder)) {
-                        asyncStream.publish(new RecordResult(key, AeroException.from(ae), 0)); // Single key operation, index = 0
+                        asyncStream.publish(new RecordResult(key.getNativeKey(), AeroException.from(ae), 0)); // Single key operation, index = 0
                     }
                 }
             } finally {
@@ -472,7 +475,8 @@ public class ObjectBuilder<T> {
             }
         });
         
-        return new RecordStream(asyncStream);
+        return new TypedRecordStream<>(this.opBuilder.getSession(), opBuilder.getDataSet().getClazz(),
+                new RecordStream(asyncStream));
     }
     
     /**
@@ -481,7 +485,7 @@ public class ObjectBuilder<T> {
      * 
      * @return RecordStream containing the results
      */
-    public RecordStream execute() {
+    public TypedRecordStream<T> execute() {
         return executeSync();
     }
     
@@ -493,7 +497,7 @@ public class ObjectBuilder<T> {
      * 
      * @return RecordStream containing the results
      */
-    public RecordStream executeSync() {
+    public TypedRecordStream<T> executeSync() {
         if (Log.debugEnabled()) {
             Log.debug("ObjectBuilder.executeSync() called for " + elements.size() + " element(s), transaction: " + 
                      (txnToUse != null ? "yes" : "no"));
@@ -519,7 +523,7 @@ public class ObjectBuilder<T> {
      * 
      * @return RecordStream that will be populated as results arrive
      */
-    public RecordStream executeAsync() {
+    public TypedRecordStream<T> executeAsync() {
         if (Log.debugEnabled()) {
             Log.debug("ObjectBuilder.executeAsync() called for " + elements.size() + " element(s), transaction: " + 
                      (txnToUse != null ? "yes" : "no"));
@@ -549,7 +553,7 @@ public class ObjectBuilder<T> {
      * Execute operations synchronously for individual objects (< batch threshold).
      * All virtual threads are joined before returning.
      */
-    private RecordStream executeIndividualSync() {
+    private TypedRecordStream<T> executeIndividualSync() {
         // Apply where clause if present
         final Expression whereExp = processWhereClauseForElements();
         
@@ -562,13 +566,13 @@ public class ObjectBuilder<T> {
             Thread.startVirtualThread(() -> {
                 try {
                     RecordMapper<T> recordMapper = getMapper(element);
-                    Key key = getKeyForElement(recordMapper, element);
+                    TypedKey<T> key = getKeyForElement(recordMapper, element);
                     Operation[] operations = operationsForElement(recordMapper, element);
                     
                     OpKind type = OperationBuilder.areOperationsRetryable(operations) ? 
                             OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
                     Settings settings = this.opBuilder.getSession().getBehavior()
-                            .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace));
+                            .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.getNamespace()));
                     WritePolicy wp = settings.asWritePolicy();
                     boolean stackTraceOnException = settings.getStackTraceOnException();
                     wp.txn = this.txnToUse;
@@ -583,13 +587,13 @@ public class ObjectBuilder<T> {
                     wp.filterExp = whereExp;
                     
                     try {
-                        Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
+                        Record record = this.opBuilder.getSession().getClient().operate(wp, key.getNativeKey(), operations);
                         if (opBuilder.isRespondAllKeys() || record != null) {
-                            recordStream.publish(new RecordResult(key, record, index));
+                            recordStream.publish(new RecordResult(key.getNativeKey(), record, index));
                         }
                     } catch (AerospikeException ae) {
                         if (shouldPublish(ae, opBuilder)) {
-                            recordStream.publish(new RecordResult(key, AeroException.from(ae), index));
+                            recordStream.publish(new RecordResult(key.getNativeKey(), AeroException.from(ae), index));
                         }
                     }
                 } finally {
@@ -609,14 +613,15 @@ public class ObjectBuilder<T> {
             recordStream.complete();
         }
         
-        return new RecordStream(recordStream);
+        return new TypedRecordStream<>(this.opBuilder.getSession(), opBuilder.getDataSet().getClazz(),
+                new RecordStream(recordStream.complete()));
     }
     
     /**
      * Execute operations asynchronously for individual objects (< batch threshold).
      * Returns immediately; virtual threads complete in background.
      */
-    private RecordStream executeIndividualAsync() {
+    private TypedRecordStream<T> executeIndividualAsync() {
         // Apply where clause if present
         final Expression whereExp = processWhereClauseForElements();
         
@@ -629,13 +634,13 @@ public class ObjectBuilder<T> {
             Thread.startVirtualThread(() -> {
                 try {
                     RecordMapper<T> recordMapper = getMapper(element);
-                    Key key = getKeyForElement(recordMapper, element);
+                    TypedKey<T> key = getKeyForElement(recordMapper, element);
                     Operation[] operations = operationsForElement(recordMapper, element);
                     
                     OpKind type = OperationBuilder.areOperationsRetryable(operations) ? 
                             OpKind.WRITE_RETRYABLE : OpKind.WRITE_NON_RETRYABLE;
                     Settings settings = this.opBuilder.getSession().getBehavior()
-                            .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.namespace));
+                            .getSettings(type, OpShape.POINT, this.opBuilder.getSession().isNamespaceSC(key.getNamespace()));
                     WritePolicy wp = settings.asWritePolicy();
                     boolean stackTraceOnException = settings.getStackTraceOnException();
                     wp.txn = this.txnToUse;
@@ -650,13 +655,13 @@ public class ObjectBuilder<T> {
                     wp.filterExp = whereExp;
                     
                     try {
-                        Record record = this.opBuilder.getSession().getClient().operate(wp, key, operations);
+                        Record record = this.opBuilder.getSession().getClient().operate(wp, key.getNativeKey(), operations);
                         if (opBuilder.isRespondAllKeys() || record != null) {
-                            asyncStream.publish(new RecordResult(key, record, index));
+                            asyncStream.publish(new RecordResult(key.getNativeKey(), record, index));
                         }
                     } catch (AerospikeException ae) {
                         if (shouldPublish(ae, opBuilder)) {
-                            asyncStream.publish(new RecordResult(key, ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, index));
+                            asyncStream.publish(new RecordResult(key.getNativeKey(), ae.getResultCode(), ae.getInDoubt(), ResultCode.getResultString(ae.getResultCode()), stackTraceOnException, index));
                         }
                     }
                 } finally {
@@ -667,7 +672,8 @@ public class ObjectBuilder<T> {
             });
         }
         
-        return new RecordStream(asyncStream);
+        return new TypedRecordStream<>(this.opBuilder.getSession(), opBuilder.getDataSet().getClazz(),
+                new RecordStream(asyncStream));
     }
     
     private boolean shouldPublish(AerospikeException ae, OperationObjectBuilder<T> opBuilder) {
@@ -687,14 +693,14 @@ public class ObjectBuilder<T> {
             return null;
         }
         RecordMapper<T> firstMapper = getMapper(elements.get(0));
-        Key firstKey = getKeyForElement(firstMapper, elements.get(0));
-        return opBuilder.processWhereClause(firstKey.namespace, opBuilder.getSession());
+        TypedKey<T> firstKey = getKeyForElement(firstMapper, elements.get(0));
+        return opBuilder.processWhereClause(firstKey.getNamespace(), opBuilder.getSession());
     }
     
     /**
      * Execute operations using batch operations (10+ objects).
      */
-    private RecordStream executeBatch() {
+    private TypedRecordStream<T> executeBatch() {
         List<BatchRecord> batchWrites = new ArrayList<>();
 
         // Apply where clause if present
@@ -715,7 +721,7 @@ public class ObjectBuilder<T> {
         try {
             for (T element : elements) {
                 RecordMapper<T> recordMapper = getMapper(element);
-                Key key = getKeyForElement(recordMapper, element);
+                TypedKey<T> key = getKeyForElement(recordMapper, element);
                 Operation[] operations = operationsForElement(recordMapper, element);
                 
                 BatchWritePolicy bwp = new BatchWritePolicy();
@@ -727,7 +733,7 @@ public class ObjectBuilder<T> {
                 bwp.expiration = expirationAsInt;
                 bwp.durableDelete = settings.getUseDurableDelete();
 
-                batchWrites.add(new BatchWrite(bwp, key, operations));
+                batchWrites.add(new BatchWrite(bwp, key.getNativeKey(), operations));
             }
         
             batchPolicy.setTxn(this.txnToUse);
@@ -744,7 +750,8 @@ public class ObjectBuilder<T> {
                 }
             }
             
-            return new RecordStream(recordStream);
+            return new TypedRecordStream<>(this.opBuilder.getSession(), opBuilder.getDataSet().getClazz(),
+                new RecordStream(recordStream.complete()));
         }
         finally {
             recordStream.complete();

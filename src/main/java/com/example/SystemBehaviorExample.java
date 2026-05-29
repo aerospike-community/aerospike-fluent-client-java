@@ -2,7 +2,6 @@ package com.example;
 
 import java.time.Duration;
 
-import com.aerospike.ClusterDefinition;
 import com.aerospike.SystemSettings;
 import com.aerospike.SystemSettingsRegistry;
 import com.aerospike.client.policy.ReadModeSC;

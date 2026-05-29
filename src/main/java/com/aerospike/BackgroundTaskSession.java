@@ -76,6 +76,10 @@ public class BackgroundTaskSession {
     public BackgroundOperationBuilder update(DataSet dataset) {
         return new BackgroundOperationBuilder(session, dataset, OpType.UPDATE);
     }
+
+    public BackgroundOperationBuilder update(TypedDataSet<?> dataset) {
+        return update(DataSet.of(dataset.getNamespace(), dataset.getSet()));
+    }
     
     /**
      * Create background delete operation for a dataset.
@@ -98,6 +102,10 @@ public class BackgroundTaskSession {
      */
     public BackgroundOperationBuilder delete(DataSet dataset) {
         return new BackgroundOperationBuilder(session, dataset, OpType.DELETE);
+    }
+
+    public BackgroundOperationBuilder delete(TypedDataSet<?> dataset) {
+        return delete(DataSet.of(dataset.getNamespace(), dataset.getSet()));
     }
     
     /**
@@ -124,5 +132,8 @@ public class BackgroundTaskSession {
     public BackgroundOperationBuilder touch(DataSet dataset) {
         return new BackgroundOperationBuilder(session, dataset, OpType.TOUCH);
     }
-}
 
+    public BackgroundOperationBuilder touch(TypedDataSet<?> dataset) {
+        return touch(DataSet.of(dataset.getNamespace(), dataset.getSet()));
+    }
+}

@@ -81,8 +81,8 @@ session.upsert(key)
 
 ```java
 // Compile-time type checking
-TypeSafeDataSet<Customer> customers = 
-    TypeSafeDataSet.of("test", "customers", Customer.class);
+TypedDataSet<Customer> customers = 
+    TypedDataSet.of("test", "customers", Customer.class);
 
 // Type-safe operations
 session.upsert(customers)
@@ -169,8 +169,8 @@ public class CustomerMapper implements RecordMapper<Customer> {
 }
 
 // Use everywhere
-TypeSafeDataSet<Customer> customers = 
-    TypeSafeDataSet.of("test", "customers", Customer.class);
+TypedDataSet<Customer> customers = 
+    TypedDataSet.of("test", "customers", Customer.class);
 
 session.upsert(customers).object(customer).execute();
 List<Customer> results = session.query(customers).execute()

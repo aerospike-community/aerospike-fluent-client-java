@@ -1,8 +1,6 @@
 package com.aerospike.query;
 
 import com.aerospike.RecordResult;
-import com.aerospike.client.Key;
-import com.aerospike.client.Record;
 
 public class SingleItemRecordStream implements RecordStreamImpl {
     private final RecordResult record;

@@ -79,9 +79,9 @@ try (Cluster cluster = new ClusterDefinition("localhost", 3000).connect()) {
     );
     cluster.setRecordMappingFactory(mappingFactory);
 
-    // 3. The factory is now ready to be used by TypeSafeDataSet operations
+    // 3. The factory is now ready to be used by TypedDataSet operations
     Session session = cluster.createSession(Behavior.DEFAULT);
-    TypeSafeDataSet<User> userDataSet = TypeSafeDataSet.of("test", "users", User.class);
+    TypedDataSet<User> userDataSet = TypedDataSet.of("test", "users", User.class);
 
     // This operation will now automatically find and use UserMapper
     session.insert(userDataSet).object(new User(...)).execute();

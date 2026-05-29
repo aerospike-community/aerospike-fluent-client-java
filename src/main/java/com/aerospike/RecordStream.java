@@ -18,7 +18,6 @@ import com.aerospike.client.policy.QueryPolicy;
 import com.aerospike.client.query.PartitionFilter;
 import com.aerospike.client.query.RecordSet;
 import com.aerospike.client.query.Statement;
-import com.aerospike.exception.AeroException;
 import com.aerospike.query.RecordStreamImpl;
 import com.aerospike.query.SingleItemRecordStream;
 

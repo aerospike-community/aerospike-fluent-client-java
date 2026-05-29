@@ -219,10 +219,10 @@ User fetchedUser = new User(
 **Fluent:**
 *(Built-in, type-safe object mapping)*
 ```java
-import com.aerospike.TypeSafeDataSet;
+import com.aerospike.TypedDataSet;
 
 // Assumes a UserMapper is registered
-TypeSafeDataSet<User> typedUsers = TypeSafeDataSet.of("test", "users", User.class);
+TypedDataSet<User> typedUsers = TypedDataSet.of("test", "users", User.class);
 
 // Writing an object
 User user = new User("user123", "Alice", 30);
@@ -235,7 +235,7 @@ Optional<User> fetchedUser = session.query(typedUsers.id("user123"))
 ```
 **Key Differences:**
 - The Fluent Client has a first-class, built-in object mapping system.
-- `TypeSafeDataSet` provides compile-time safety.
+- `TypedDataSet` provides compile-time safety.
 - The `.object()` method makes writing POJOs a single, clean operation.
 - Reading objects back is equally simple, with automatic deserialization.
 

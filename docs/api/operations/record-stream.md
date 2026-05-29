@@ -6,7 +6,9 @@ A forward-only iterator for processing query results.
 
 ## Overview
 
-All query operations in the Fluent Client return a `RecordStream`. It is a powerful, lazily evaluated iterator that allows you to process results from the database without loading them all into memory at once. It implements `Iterator<KeyRecord>` and `Closeable`, so it can be used in a `for-each` loop or a `try-with-resources` block.
+All **untyped** query operations return a `RecordStream`. Queries started from **`TypedDataSet`** or **`TypedKey`** return **`TypedRecordStream<T>`** instead; see **[Typed query and mapping](../../guides/object-mapping/typed-query-and-mapping.md)** and **`TypedRecordStream`** Javadoc.
+
+`RecordStream` is a powerful, lazily evaluated iterator that allows you to process results from the database without loading them all into memory at once. It implements `Iterator<KeyRecord>` and `Closeable`, so it can be used in a `for-each` loop or a `try-with-resources` block.
 
 The `RecordStream` is designed to be flexible, supporting simple iteration, conversion to Java Streams, and object mapping.
 
@@ -69,7 +71,7 @@ List<String> activeUserNames = session.query(users)
 
 - **`Stream<KeyRecord> stream()`**: Converts the `RecordStream` to a standard Java `Stream<KeyRecord>`.
 - **`List<KeyRecord> toList()`**: Consumes all records from the stream and collects them into a `List`. **Warning**: This can cause an `OutOfMemoryError` if the result set is large.
-- **`<T> List<T> toObjectList()`**: If a `TypeSafeDataSet<T>` was used for the query, this method consumes all records and maps them to a `List<T>`.
+- **`<T> List<T> toObjectList()`**: If a `TypedDataSet<T>` was used for the query, this method consumes all records and maps them to a `List<T>`.
 - **`<T> List<T> toObjectList(RecordMapper<T> mapper)`**: Consumes all records and maps them to a `List<T>` using the provided mapper.
 
 ### Single Record Retrieval

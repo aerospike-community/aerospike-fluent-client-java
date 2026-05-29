@@ -3,6 +3,7 @@ package com.example;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -13,17 +14,16 @@ import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.DataSet;
 import com.aerospike.DefaultRecordMappingFactory;
-import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
 import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.TypeSafeDataSet;
+import com.aerospike.TypedDataSet;
+import com.aerospike.TypedNavigatableRecordStream;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Log.Level;
 import com.aerospike.client.ResultCode;
 import com.aerospike.client.cdt.MapOrder;
-import com.aerospike.client.query.KeyRecord;
 import com.aerospike.client.task.ExecuteTask;
 import com.aerospike.dslobjects.Dsl;
 import com.aerospike.info.classes.NamespaceDetail;
@@ -39,7 +39,7 @@ import com.example.model_mappers.CustomerMapper;
 
 public class QueryExamples {
     
-    public static void print(RecordStream recordStream) {
+    public static void print(Iterator<RecordResult> recordStream) {
         int count = 0;
         while (recordStream.hasNext()) {
             RecordResult key = recordStream.next();
@@ -100,7 +100,7 @@ public class QueryExamples {
             Behavior nonExceptionBehvaior = Behavior.DEFAULT.deriveWithChanges("nonException", builder -> 
                 builder.on(Selectors.all(), ops -> ops.stackTraceOnException(false)));
                 
-            TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "person", Customer.class);
+            TypedDataSet<Customer> customerDataSet = TypedDataSet.of("test", "person", Customer.class);
 //            DataSet customerDataSet = DataSet.of("test", "person");
             
             Session session = cluster.createSession(newBehavior);
@@ -118,17 +118,19 @@ public class QueryExamples {
                 System.out.printf("Secondary index: %s\n", sindex);
                 System.out.println("   " + session.info().secondaryIndexDetails(sindex));
             });
-            session.upsert(customerDataSet.ids(1,2,3,4,5)).bin("holdings").add(1).execute();
-            session.upsert(customerDataSet.ids(1,2,3))
+            session.upsertKeys(customerDataSet.ids(1,2,3,4,5)).bin("holdings").add(1).execute();
+            session.upsertKeys(customerDataSet.ids(1,2,3))
                     .bins("name", "age")
                     .values("Tim", 312)
                     .values("Bob", 25)
                     .values("Jane", 46)
                     .execute();
             
-            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
-            session.delete(customerDataSet.ids(2)).durablyDelete(false).execute();
-//            System.out.printf("id(2) exists: %b\n", session.exists(customerDataSet.ids(2)).execute().getFirst());
+            Optional<Customer> first = session.query(customerDataSet.id(1)).execute().getFirstObject();
+            
+            System.out.printf("id(2) exists: %b\n", session.existsKeys(customerDataSet.ids(2)).execute().getFirst());
+            session.deleteKeys(customerDataSet.ids(2)).durablyDelete(false).execute();
+//            System.out.printf("id(2) exists: %b\n", session.existsKeys(customerDataSet.ids(2)).execute().getFirst());
             
             DataSet users = DataSet.of("test", "users");
 
@@ -138,7 +140,7 @@ public class QueryExamples {
                     .execute();
             System.out.println(result.getFirst());
             
-            session.upsert(customerDataSet.ids(81, 82))
+            session.upsertKeys(customerDataSet.ids(81, 82))
                     .bin("name").setTo("Tim")
                     .bin("age").setTo(343)
                     .execute();
@@ -146,7 +148,7 @@ public class QueryExamples {
                     .bins("name", "age")
                     .values("Tim", 342)
                     .execute();
-            session.upsert(customerDataSet.ids(84, 85))
+            session.upsertKeys(customerDataSet.ids(84, 85))
                     .bins("name", "age")
                     .values("Tim", 342)
                     .values("Fred", 37)
@@ -165,17 +167,17 @@ public class QueryExamples {
                     .expireRecordAt(LocalDateTime.of(2030, 1, 1, 0, 0))
                     .execute();
 
-            session.delete(customerDataSet.ids(900, 901, 902, 903, 904, 905)).execute();
+            session.deleteKeys(customerDataSet.ids(900, 901, 902, 903, 904, 905)).execute();
             
             session.insert(customerDataSet.id(899))
                     .bins("name", "age", "hair", "dob")
                     .values("Tim", 312, "brown", new Date().getTime());
                     
-            RecordStream values = session.insert(customerDataSet.ids(900, 901, 902, 903, 904,905))
+            RecordStream values = session.insertKeys(customerDataSet.ids(900, 901, 902, 903, 904,905))
                     .bins("name", "age", "hair", "dob")
                     .values("Tim", 312, "brown", new Date().getTime())
                     .values("Jane", 28, "blonde", new Date().getTime())
-                    .values("Bob", 54, "brown", new Date().getTime())
+                    .values("Bob", 54, "brown", new Date().getTime()).expireRecordAfter(Duration.ofDays(5))
                     .values("Jordan", 45, "red", new Date().getTime())
                     .values("Alex", 67, "blonde", new Date().getTime())
                     .values("Sam", 24, "brown", new Date().getTime())
@@ -199,7 +201,7 @@ public class QueryExamples {
 //              .values("Jane", 28, "blonde", new Date().getTime())
             }
             
-            session.delete(customerDataSet.ids(1,2,3,5,7,11,13,17)).execute();
+            session.deleteKeys(customerDataSet.ids(1,2,3,5,7,11,13,17)).execute();
             
             session.delete(customerDataSet.id(102)).execute();
             
@@ -322,7 +324,7 @@ public class QueryExamples {
                     session.query(customerDataSet.id(46)).execute().getFirstRecord().getInt("age"));
 
             // Batch partition filter test
-            List<Key> keys = customerDataSet.ids(IntStream.rangeClosed(20, 48).toArray());
+            List<Key> keys = Session.nativeKeysFromTyped(customerDataSet.ids(IntStream.rangeClosed(20, 48).toArray()));
             System.out.println("Read 25 records, but only those in partitions 0->2047");
             print(session.query(keys)
                     .onPartitionRange(0, 2048)
@@ -348,7 +350,7 @@ public class QueryExamples {
             System.out.println("Read the set, limit 6");
             print(session.query(customerDataSet).limit(6).execute());
             
-            List<Key> keyList2 = customerDataSet.ids(20,21,22,23,24,25,26,27);
+            List<Key> keyList2 = Session.nativeKeysFromTyped(customerDataSet.ids(20,21,22,23,24,25,26,27));
             RecordStream thisStream = session.update(keyList2)
                    .bin("age").add(1)
                    .execute();
@@ -398,10 +400,10 @@ public class QueryExamples {
 //                    .execute();
             
             System.out.println("\nRead point records - in the same order as the keys, limit to 3");
-            print(session.query(customerDataSet.ids(1,3,5,7)).limit(3).execute());
+            print(session.queryTypedKeys(customerDataSet.ids(1,3,5,7)).limit(3).execute());
 
             System.out.println("\nSingle point record");
-            print(session.query(customerDataSet.ids(6)).execute());
+            print(session.queryTypedKeys(customerDataSet.ids(6)).execute());
             
             System.out.println("Read the set, output as stream, limit of 5");
             session.query(customerDataSet).limit(5).execute()
@@ -412,23 +414,23 @@ public class QueryExamples {
             System.out.println("Read header, point read");
             print(session.query(customerDataSet.id(6)).withNoBins().execute());
             System.out.println("Read header, batch read");
-            print(session.query(customerDataSet.ids(6,7,8)).withNoBins().execute());
+            print(session.queryTypedKeys(customerDataSet.ids(6,7,8)).withNoBins().execute());
             System.out.println("Read header, set read");
             print(session.query(customerDataSet).withNoBins().execute());
             
             System.out.println("Read with select bins, point read");
-            print(session.query(customerDataSet.ids(6)).readingOnlyBins("name", "age").execute());
+            print(session.queryTypedKeys(customerDataSet.ids(6)).readingOnlyBins("name", "age").execute());
             System.out.println("Read with select bins, batch read");
-            print(session.query(customerDataSet.ids(6,7,8)).readingOnlyBins("name", "age").execute());
+            print(session.queryTypedKeys(customerDataSet.ids(6,7,8)).readingOnlyBins("name", "age").execute());
             System.out.println("Read with select bins, set read");
             print(session.query(customerDataSet).readingOnlyBins("name", "age").execute());
             
-//            session.update(customerDataSet.ids(1,2,3,4))
+//            session.updateKeys(customerDataSet.ids(1,2,3,4))
 //                    .bin
 
             // Throw an exception
             try {
-                print(session.query(customerDataSet.ids(6,7,8)).readingOnlyBins("name", "age").withNoBins().execute());
+                print(session.queryTypedKeys(customerDataSet.ids(6,7,8)).readingOnlyBins("name", "age").withNoBins().execute());
             }
             catch (Exception e) {
                 e.printStackTrace();
@@ -444,20 +446,20 @@ public class QueryExamples {
 //                txnSession.insert(customerDataSet.id(3)).notInAnyTransaction().execute();
 //            });
             
-            customers = session.query(customerDataSet.ids(20, 21)).execute().toObjectList(customerMapper);
+            customers = session.queryTypedKeys(customerDataSet.ids(20, 21)).execute().toObjectList();
             System.out.println(customers); 
 
             // Records-per-second check
-            RecordStream queryResults = session.query(customerDataSet).recordsPerSecond(1).execute();
+            var queryResults = session.query(customerDataSet).recordsPerSecond(1).execute();
             queryResults.forEach(rr -> System.out.println(rr.recordOrThrow()));
             // session.query(customerDataSet.id(1)).recordsPerSecond(100).execute();
             
             // Server-side chunking example - fetch records in chunks of 20
-            customers = session.query(customerDataSet).chunkSize(20).execute().toObjectList(customerMapper);
+            customers = session.query(customerDataSet).chunkSize(20).execute().toObjectList();
             System.out.println(customers);
 
             // Server-side chunking example - process records in chunks of 10
-            RecordStream rs = session.query(customerDataSet).chunkSize(10).execute();
+            var rs = session.query(customerDataSet).chunkSize(10).execute();
             int chunk = 0;
             while (rs.hasMoreChunks()) {
                 System.out.println("Chunk: " + (++chunk));
@@ -476,7 +478,7 @@ public class QueryExamples {
                     .execute()
                     .asNavigatableStream()
                     .sortBy("name", SortDir.SORT_ASC, true)
-                    .toObjectList(customerMapper);
+                    .toObjectList();
             
             for (Customer customer : customers) {
                 System.out.println(customer);
@@ -490,7 +492,7 @@ public class QueryExamples {
                     .execute()
                     .asNavigatableStream()
                     .sortBy("name", SortDir.SORT_ASC, true)
-                    .toObjectList(customerMapper);
+                    .toObjectList();
             for (Customer customer : customers) {
                 System.out.println(customer);
             }
@@ -499,7 +501,7 @@ public class QueryExamples {
             
 
             System.out.println("\n\nSorting customers by Age (desc) then name (asc), using NavigatableRecordStream for client-side pagination");
-            try (NavigatableRecordStream navStream = session.query(customerDataSet)
+            try (TypedNavigatableRecordStream<Customer> navStream = session.query(customerDataSet)
                     .limit(13)
                     .execute()
                     .asNavigatableStream()
@@ -512,7 +514,7 @@ public class QueryExamples {
                 int page = 0;
                 while (navStream.hasMorePages()) {
                     System.out.println("---- Page " + (++page) + " -----");
-                    customers = navStream.toObjectList(customerMapper);
+                    customers = navStream.toObjectList();
                     customers.forEach(cust -> System.out.println(cust));
                 }
                 System.out.println("---- End sort ---");
@@ -529,24 +531,52 @@ public class QueryExamples {
                 int pageNum = 0;
                 while (navStream.hasMorePages()) {
                     System.out.println("---- Page " + (++pageNum) + " -----");
-                    List<Customer> custList = navStream.toObjectList(customerMapper);
+                    List<Customer> custList = navStream.toObjectList();
                     custList.forEach(cust -> System.out.println(cust));
                 }
                 System.out.println("---- End sort ---");
             }
 
+            // ---------------------------
+            // Background query operations
+            // ---------------------------
+            session.backgroundTask().update(customerDataSet)
+                .bin("age").add(1)
+                .where("$.state == 'nsw'")
+                .execute();
+
+            // ------------------------
+            // Multi operation batches
+            // ------------------------
             RecordStream rsStream = session
-                    .update(customerDataSet.ids(1000, 1001))
-                        .bin("age").add(1)
-                        .bin("dob").setTo(new Date().getTime())
-                        .where("$.age > 100")
-                    .exists(customerDataSet.ids(1000,1001))
-                    .query(customerDataSet.ids(10,12))
-                    .delete(customerDataSet.id(1003))
-                    .execute();
+                .updateKeys(customerDataSet.ids(1000, 1001))
+                    .bin("age").add(1)
+                    .bin("dob").setTo(new Date().getTime())
+                    .where("$.age > 100")
+                .existsKeys(customerDataSet.ids(1000,1001))
+                .queryTypedKeys(customerDataSet.ids(10,12))
+                .delete(customerDataSet.id(1003))
+                .notInAnyTransaction()
+                .execute();
             System.out.println("Multi operations:");
             print(rsStream);
             
+            rsStream = session
+                    .updateKeys(customerDataSet.ids(1,2,3))
+                        .bin("age").add(1)
+                        .bin("updated").setTo(true)
+                        .where("$.age < 21")
+                    .deleteKeys(customerDataSet.ids(11,12,13,14,15))
+                    .updateKeys(customerDataSet.ids(5,6,7))
+                        .bin("luckyWinner").setTo("true")
+                    .defaultWhere("$.updated == false")
+                    .execute();
+                        
+                    
+            
+            // --------------------
+            // Object mapping
+            // --------------------            
             // Insert then read back a customer with an address
             System.out.println("\n--- Object mapping test ----");
             Customer sampleCust = new Customer(999, "sample", 456, new Date(), new Address("123 Main St", "Denver", "CO", "USA", "80112"));
@@ -554,13 +584,16 @@ public class QueryExamples {
             
             session.delete(customerDataSet.id(999)).execute();
             session.insert(customerDataSet).object(sampleCust).execute();
-            Customer readCustomer = session.query(customerDataSet.id(999)).execute().toObjectList(customerMapper).get(0);
+            Customer readCustomer = session.query(customerDataSet.id(999)).execute().toObjectList().get(0);
             System.out.println("Customer read back: " + readCustomer);
             System.out.println("--- End object mapping test ----");
             
+            // ----------------
+            // Generation check
+            // ----------------
             System.out.println("\n--- Generation check test ----");
             
-            RecordStream data = session.query(customerDataSet.id(999)).execute();
+            var data = session.query(customerDataSet.id(999)).execute();
             data.getFirst().ifPresent(keyRecord -> {
                 int generation = keyRecord.recordOrThrow().generation;
                 System.out.println("   Read record with generation of " + generation);

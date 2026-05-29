@@ -30,7 +30,7 @@ session.upsert(key)
 | **Actions** | Verb-first | `query()`, `upsert()`, `insert()`, `update()`, `delete()` |
 | **Configuration** | `with` prefix | `withNativeCredentials()`, `withLogLevel()` |
 | **Targeting** | `on` prefix | `onMapKey()`, `onListIndex()`, `onPartition()` |
-| **Factories** | `of()` static | `DataSet.of()`, `TypeSafeDataSet.of()` |
+| **Factories** | `of()` static | `DataSet.of()`, `TypedDataSet.of()` |
 | **Sub-navigation** | Plain noun | `.bin("name")`, `.bins("a", "b")` |
 | **Conditions** | `where()` / `when()` | `.where("$.age > 30")` |
 | **Termination** | `.execute()` / `.connect()` | Triggers actual operation |
@@ -87,7 +87,7 @@ session.doInTransaction(tx -> {
 ## Type Safety Features
 
 ✅ **Strongly Typed:**
-- `TypeSafeDataSet<Customer>` prevents wrong object types
+- `TypedDataSet<Customer>` prevents wrong object types
 - CDT builders enforce legal operations at compile time (e.g., can't call `.countAllOthers()` after `.onMapIndex()`)
 - Generic builders: `OperationObjectBuilder<T>`
 
@@ -116,7 +116,7 @@ session.doInTransaction(tx -> {
 | Issue | Current State | Impact | Recommendation |
 |-------|---------------|--------|----------------|
 | **Typo in field name** | `preferrredRacks` (triple 'r') | Low - internal only | Rename to `preferredRacks` |
-| **Verb inconsistency** | `insertInto()` vs `upsert()` | Low - established API | Consider dropping "Into" suffix in v2.0 |
+| **Verb inconsistency** | `insert()` vs `upsert()` | Low — use `insert()` / `insertKeys()` / typed overloads consistently |
 | **Query terminology** | `query(key)` for point reads | Low - slight confusion | Add `read(key)` alias or document clearly |
 
 ### ✅ Intentional "Inconsistencies" (Actually Correct)
@@ -272,7 +272,7 @@ When adding new methods, verify:
 
 **When generating new Aerospike fluent client code:**
 
-> "Follow the fluent builder pattern with verb-first method names. Methods should chain by returning the builder type. Configuration methods use 'with' prefix, targeting uses 'on' prefix. Terminal operations call .execute(). Overload methods for String, int, long, byte[] variants. Use TypeSafe generics where applicable. Example: `session.upsert(key).bin("name").setTo("value").expireRecordAfter(duration).execute();`"
+> "Follow the fluent builder pattern with verb-first method names. Methods should chain by returning the builder type. Configuration methods use 'with' prefix, targeting uses 'on' prefix. Terminal operations call .execute(). Overload methods for String, int, long, byte[] variants. Use typed APIs (`TypedDataSet`, `TypedKey`, `TypedRecordStream`) where applicable. Example: `session.upsert(key).bin("name").setTo("value").expireRecordAfter(duration).execute();`"
 
 **Key phrases to include in prompts:**
 - "Fluent builder pattern"

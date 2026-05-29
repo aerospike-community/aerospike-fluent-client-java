@@ -74,7 +74,7 @@ UserMapper userMapper = new UserMapper();
 // The mapper's id(alice) method will be called to get "alice-123"
 Key userKey = users.id(alice, userMapper);
 ```
-> **Note**: This method is less common. `TypeSafeDataSet` provides a more integrated way to work with objects.
+> **Note**: This method is less common. `TypedDataSet` provides a more integrated way to work with objects.
 
 ## Using `DataSet` with `Session`
 
@@ -154,6 +154,6 @@ public class UserRepository {
 
 ## Related Classes
 
-- **`TypeSafeDataSet`**: The typed equivalent for working with Java objects.
+- **`TypedDataSet`**: The typed equivalent for working with Java objects.
 - **`Key`**: The object created by the `DataSet` factory methods.
 - **`Session`**: The class that consumes the `Key` objects produced by `DataSet`.

@@ -264,7 +264,7 @@ try (Cluster cluster = definition.connect()) {
     Session session = cluster.createSession(Behavior.DEFAULT);
 
     // The session will now automatically use your custom mappers
-    TypeSafeDataSet<User> users = TypeSafeDataSet.of("test", "users", User.class);
+    TypedDataSet<User> users = TypedDataSet.of("test", "users", User.class);
     
     User newUser = new User(...);
     session.upsert(users).object(newUser).execute(); // Uses your UserMapper
@@ -277,4 +277,5 @@ try (Cluster cluster = definition.connect()) {
 ## Next Steps
 
 - **[Creating Mappers](./creating-mappers.md)**: Review the basics of creating simple mappers.
-- **[Using TypeSafeDataSets](./using-typesafe-datasets.md)**: See how `TypeSafeDataSet` leverages these mappers for compile-time safety.
+- **[Using TypedDataSets](./using-typesafe-datasets.md)**: See how `TypedDataSet` leverages these mappers for compile-time safety.
+- **[Typed query and mapping](./typed-query-and-mapping.md)**: How typed query streams resolve mappers and pass `RecordReadContext`.

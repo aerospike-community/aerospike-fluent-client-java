@@ -61,7 +61,7 @@ Work with Java objects instead of raw bins.
 
 **Key Topics**:
 - RecordMapper interface
-- TypeSafeDataSet
+- TypedDataSet
 - Automatic serialization
 - Custom mappers
 - Best practices
@@ -77,7 +77,7 @@ ClusterDefinition → Cluster (Connection Pool)
                         ↓
                     Session (+ Behavior Config)
                         ↓
-                    DataSet/TypeSafeDataSet
+                    DataSet/TypedDataSet
                         ↓
                     OperationBuilder/QueryBuilder
                         ↓
@@ -107,7 +107,7 @@ import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.Session;
 import com.aerospike.DataSet;
-import com.aerospike.TypeSafeDataSet;
+import com.aerospike.TypedDataSet;
 import com.aerospike.RecordStream;
 import com.aerospike.KeyRecord;
 import com.aerospike.policy.Behavior;
@@ -181,8 +181,8 @@ builder.execute();  // Now it executes
 The API encourages type-safe operations:
 
 ```java
-TypeSafeDataSet<Customer> customers = 
-    TypeSafeDataSet.of("test", "customers", Customer.class);
+TypedDataSet<Customer> customers = 
+    TypedDataSet.of("test", "customers", Customer.class);
 
 // Compile-time checking
 session.upsert(customers)
@@ -285,8 +285,8 @@ results.forEach(record -> {
 ### Pattern 4: Object Mapping
 
 ```java
-TypeSafeDataSet<Customer> customers = 
-    TypeSafeDataSet.of("test", "customers", Customer.class);
+TypedDataSet<Customer> customers = 
+    TypedDataSet.of("test", "customers", Customer.class);
 
 Customer alice = new Customer("Alice", 30);
 session.upsert(customers).object(alice).execute();

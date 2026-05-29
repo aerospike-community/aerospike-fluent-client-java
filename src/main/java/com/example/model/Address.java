@@ -1,5 +1,9 @@
 package com.example.model;
 
+import com.aerospike.mapper.annotations.AerospikeRecord;
+import com.aerospike.mapper.annotations.ParamFrom;
+
+@AerospikeRecord()
 public class Address {
     private final String line1;
     private final String city;
@@ -7,7 +11,11 @@ public class Address {
     private final String country;
     private final String zipCode;
     
-    public Address(String line1, String city, String state, String country, String zipCode) {
+    public Address(@ParamFrom("line1") String line1, 
+            @ParamFrom("city") String city, 
+            @ParamFrom("state") String state, 
+            @ParamFrom("country") String country, 
+            @ParamFrom("zipCode") String zipCode) {
         super();
         this.line1 = line1;
         this.city = city;

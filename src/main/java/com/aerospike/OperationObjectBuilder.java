@@ -10,12 +10,12 @@ import com.aerospike.query.PreparedDsl;
 import com.aerospike.query.WhereClauseProcessor;
 
 public class OperationObjectBuilder<T> extends AbstractFilterableBuilder implements FilterableOperation<OperationObjectBuilder<T>> {
-    private final DataSet dataSet;
+    private final TypedDataSet<T> dataSet;
     private final List<Operation> ops = new ArrayList<>();
     private final OpType opType;
     private final Session session;
     
-    public OperationObjectBuilder(Session session, DataSet dataSet, OpType type) {
+    public OperationObjectBuilder(Session session, TypedDataSet<T> dataSet, OpType type) {
         this.dataSet = dataSet;
         this.opType = type;
         this.session = session;
@@ -39,7 +39,7 @@ public class OperationObjectBuilder<T> extends AbstractFilterableBuilder impleme
         return new ObjectBuilder<T>(this, element);
     }
     
-    public DataSet getDataSet() {
+    public TypedDataSet<T> getDataSet() {
         return dataSet;
     }
     public Session getSession() {

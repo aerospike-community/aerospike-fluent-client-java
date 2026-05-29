@@ -124,17 +124,17 @@ cluster.setRecordMappingFactory(new DefaultRecordMappingFactory(Map.of(
 
 ### 4. Using the Mapper
 
-Now you can use `TypeSafeDataSet` to perform object-oriented operations.
+Now you can use `TypedDataSet` to perform object-oriented operations.
 
 ```java
-TypeSafeDataSet<Product> products = 
-    TypeSafeDataSet.of("ecommerce", "products", Product.class);
+TypedDataSet<Product> products = 
+    TypedDataSet.of("ecommerce", "products", Product.class);
 
 // Create a new product object
 Product newProduct = new Product("prod-123", "Laptop", 1299.99, 50, true);
 
 // The client will use your ProductMapper automatically
-session.insertInto(products)
+session.insert(products)
     .object(newProduct)
     .execute();
 
@@ -310,13 +310,14 @@ If you have common fields like `createdAt` or `updatedAt`, create a base mapper 
 Mappers should only be responsible for data conversion.
 
 **Don't forget to register your mappers**
-If you forget, the `DefaultRecordMappingFactory` will throw an exception when you try to use the corresponding `TypeSafeDataSet`.
+If you forget, the `DefaultRecordMappingFactory` will throw an exception when you try to use the corresponding `TypedDataSet`.
 
 ---
 
 ## Next Steps
 
-- **[Using TypeSafeDataSets](./typesafe-datasets.md)** - Learn how to use your mappers with type-safe operations.
+- **[Using TypedDataSets](./using-typesafe-datasets.md)** - Learn how to use your mappers with type-safe operations.
+- **[Typed query and mapping](./typed-query-and-mapping.md)** - Typed streams, navigable mapping, heterogeneous batch reads.
 - **[Object Mapping Concepts](../../concepts/object-mapping.md)** - Revisit the core concepts.
 
 ---

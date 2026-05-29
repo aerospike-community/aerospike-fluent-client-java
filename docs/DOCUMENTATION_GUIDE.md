@@ -41,7 +41,7 @@ Step-by-step instructions for specific tasks.
 
 **Complex Data Types**: Lists, maps, nested operations
 
-**Object Mapping**: Creating mappers, TypeSafeDataSets, custom serialization
+**Object Mapping**: Creating mappers, TypedDataSets, custom serialization
 
 **Configuration**: Java and YAML configuration, duration formats, dynamic reloading
 

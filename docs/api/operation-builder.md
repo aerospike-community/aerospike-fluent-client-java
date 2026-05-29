@@ -19,8 +19,8 @@ OperationBuilder builder = session.upsert(users.id("alice"));
 // From a list of keys (for a batch operation)
 OperationBuilder batchBuilder = session.update(users.ids("alice", "bob"));
 
-// From a TypeSafeDataSet (for an object operation)
-OperationBuilder objectBuilder = session.insertInto(users).object(myUser);
+// From a TypedDataSet (for an object operation)
+OperationBuilder objectBuilder = session.insert(users).object(myUser);
 ```
 
 ## Core Method Categories

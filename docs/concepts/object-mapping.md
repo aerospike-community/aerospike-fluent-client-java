@@ -46,16 +46,32 @@ if (result.hasNext()) {
 
 ### With Object Mapping
 
+Register your mappers once on the cluster, bind a **`TypedDataSet<Customer>`**, then read without passing a mapper: **`TypedRecordStream<Customer>`** resolves **`RecordMapper<Customer>`** from the factory and calls **`fromMap(..., RecordReadContext<Customer>)`** when you use **`toObjectList()`**.
+
 ```java
+import com.aerospike.DefaultRecordMappingFactory;
+import com.aerospike.TypedDataSet;
+import java.util.Map;
+
+// Application startup: register mappers (required for no-arg toObjectList)
+cluster.setRecordMappingFactory(new DefaultRecordMappingFactory(Map.of(
+    Customer.class, new CustomerMapper()
+)));
+
+TypedDataSet<Customer> customers =
+    TypedDataSet.of("app", "customers", Customer.class);
+
 // Automatic serialization
 Customer customer = new Customer("alice", "Alice Johnson", 30, "alice@example.com");
 session.upsert(customers).object(customer).execute();
 
-// Automatic deserialization
-List<Customer> results = session.query(customers)
+// Automatic deserialization — mapper comes from the factory, not a local variable
+List<Customer> results = session.query(customers.id("alice"))
     .execute()
-    .toObjectList(customerMapper);
+    .toObjectList();
 ```
+
+**Typed vs untyped reads:** `session.query(TypedDataSet<T>)` / `query(TypedKey<T>)` / `queryTypedKeys(...)` return **`TypedRecordStream<T>`**, which supports **`toObjectList()`** (no arguments). If you use **`session.query(DataSet)`** or **`query(Key)`**, you get a **`RecordStream`**; there you still call **`toObjectList(customerMapper)`** when you want POJOs, unless you switch that call site to a typed dataset or keys.
 
 ## Core Components
 
@@ -146,13 +162,13 @@ cluster.setRecordMappingFactory(new DefaultRecordMappingFactory(Map.of(
 )));
 ```
 
-### 4. TypeSafeDataSet
+### 4. TypedDataSet
 
 Type-safe dataset bound to a class:
 
 ```java
-TypeSafeDataSet<Customer> customers = 
-    TypeSafeDataSet.of("app", "customers", Customer.class);
+TypedDataSet<Customer> customers = 
+    TypedDataSet.of("app", "customers", Customer.class);
 ```
 
 ## Complete Setup Example
@@ -235,20 +251,19 @@ cluster.setRecordMappingFactory(new DefaultRecordMappingFactory(Map.of(
 ### Step 4: Use Object Operations
 
 ```java
-// Create TypeSafeDataSet
-TypeSafeDataSet<User> users = 
-    TypeSafeDataSet.of("app", "users", User.class);
+// Create TypedDataSet
+TypedDataSet<User> users = 
+    TypedDataSet.of("app", "users", User.class);
 
 // Write object
 User alice = new User(1L, "Alice Johnson", "alice@example.com");
 session.upsert(users).object(alice).execute();
 
-// Read objects
-UserMapper mapper = new UserMapper();
+// Read objects — mapper resolved from cluster.getRecordMappingFactory() (see Step 3)
 List<User> results = session.query(users)
     .where("$.active == true")
     .execute()
-    .toObjectList(mapper);
+    .toObjectList();
 
 for (User user : results) {
     System.out.println(user.getName());
@@ -428,13 +443,11 @@ public class UserMapperV2 implements RecordMapper<User> {
 ```java
 public class CustomerRepository {
     private final Session session;
-    private final TypeSafeDataSet<Customer> customers;
-    private final CustomerMapper mapper;
+    private final TypedDataSet<Customer> customers;
     
     public CustomerRepository(Session session) {
         this.session = session;
-        this.customers = TypeSafeDataSet.of("app", "customers", Customer.class);
-        this.mapper = new CustomerMapper();
+        this.customers = TypedDataSet.of("app", "customers", Customer.class);
     }
     
     public void save(Customer customer) {
@@ -446,7 +459,7 @@ public class CustomerRepository {
     public Optional<Customer> findById(String id) {
         List<Customer> results = session.query(customers.id(id))
             .execute()
-            .toObjectList(mapper);
+            .toObjectList();
         
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
@@ -455,7 +468,7 @@ public class CustomerRepository {
         return session.query(customers)
             .where("$.age >= " + minAge)
             .execute()
-            .toObjectList(mapper);
+            .toObjectList();
     }
     
     public void delete(String id) {
@@ -469,14 +482,11 @@ public class CustomerRepository {
 ```java
 public abstract class GenericRepository<T> {
     protected final Session session;
-    protected final TypeSafeDataSet<T> dataSet;
-    protected final RecordMapper<T> mapper;
+    protected final TypedDataSet<T> dataSet;
     
-    public GenericRepository(Session session, String namespace, String set, 
-                           Class<T> clazz, RecordMapper<T> mapper) {
+    public GenericRepository(Session session, String namespace, String set, Class<T> clazz) {
         this.session = session;
-        this.dataSet = TypeSafeDataSet.of(namespace, set, clazz);
-        this.mapper = mapper;
+        this.dataSet = TypedDataSet.of(namespace, set, clazz);
     }
     
     public void save(T entity) {
@@ -486,14 +496,14 @@ public abstract class GenericRepository<T> {
     public Optional<T> findById(Object id) {
         List<T> results = session.query(dataSet.idForObject(id))
             .execute()
-            .toObjectList(mapper);
+            .toObjectList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
     
     public List<T> findAll() {
         return session.query(dataSet)
             .execute()
-            .toObjectList(mapper);
+            .toObjectList();
     }
     
     public void deleteById(Object id) {
@@ -501,10 +511,10 @@ public abstract class GenericRepository<T> {
     }
 }
 
-// Usage
+// Usage — ensure UserMapper is registered on the cluster's RecordMappingFactory
 public class UserRepository extends GenericRepository<User> {
     public UserRepository(Session session) {
-        super(session, "app", "users", User.class, new UserMapper());
+        super(session, "app", "users", User.class);
     }
     
     // Add custom methods
@@ -512,7 +522,7 @@ public class UserRepository extends GenericRepository<User> {
         return session.query(dataSet)
             .where("$.active == true")
             .execute()
-            .toObjectList(mapper);
+            .toObjectList();
     }
 }
 ```
@@ -520,6 +530,9 @@ public class UserRepository extends GenericRepository<User> {
 ## Best Practices
 
 ### ✅ DO
+
+**Register mappers on the cluster before using `TypedRecordStream.toObjectList()` with no arguments.**  
+Otherwise the client cannot resolve `RecordMapper<T>` and will throw `IllegalStateException`.
 
 **Use immutable objects when possible**
 ```java
@@ -578,7 +591,8 @@ try {
 
 For complete documentation:
 - [RecordMapper API](../api/mapping/record-mapper.md)
-- [TypeSafeDataSet API](../api/operations/typesafe-dataset.md)
+- [TypedDataSet API](../api/operations/typed-dataset.md)
+- [Typed query and mapping](../guides/object-mapping/typed-query-and-mapping.md)
 - [RecordMappingFactory API](../api/mapping/record-mapping-factory.md)
 
 ## Next Steps

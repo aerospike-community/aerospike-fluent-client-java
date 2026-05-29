@@ -7,11 +7,11 @@ import java.util.Map;
 import com.aerospike.Cluster;
 import com.aerospike.ClusterDefinition;
 import com.aerospike.DefaultRecordMappingFactory;
-import com.aerospike.NavigatableRecordStream;
 import com.aerospike.RecordResult;
-import com.aerospike.RecordStream;
 import com.aerospike.Session;
-import com.aerospike.TypeSafeDataSet;
+import com.aerospike.TypedDataSet;
+import com.aerospike.TypedNavigatableRecordStream;
+import com.aerospike.TypedRecordStream;
 import com.aerospike.client.Log.Level;
 import com.aerospike.policy.Behavior;
 import com.aerospike.query.SortDir;
@@ -42,7 +42,7 @@ import com.example.model_mappers.CustomerMapper;
  * <h3>1. Basic Conversion to NavigatableRecordStream</h3>
  * <pre>{@code
  * RecordStream results = session.query(dataSet).execute();
- * NavigatableRecordStream navigatable = results.asNavigatableStream();
+ * TypedNavigatableRecordStream<Customer> navigatable = results.asNavigatableStream();
  * }</pre>
  * 
  * <h3>2. Multi-Column Sorting</h3>
@@ -97,14 +97,14 @@ public class NavigatableRecordStreamExample {
      *   <li>Convert records to business objects</li>
      * </ul>
      */
-    private static void example1_BasicPagination(Session session, TypeSafeDataSet<Customer> customerDataSet, 
+    private static void example1_BasicPagination(Session session, TypedDataSet<Customer> customerDataSet, 
                                                   CustomerMapper mapper) {
         System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║  Example 1: Basic Forward Pagination                        ║");
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
         
         // Query all customers and convert to navigatable stream
-        NavigatableRecordStream navigatable = session.query(customerDataSet).execute().asNavigatableStream()
+        TypedNavigatableRecordStream<Customer> navigatable = session.query(customerDataSet).execute().asNavigatableStream()
             .pageSize(5)
             .sortBy("name");
         
@@ -115,7 +115,7 @@ public class NavigatableRecordStreamExample {
         // Iterate forward through all pages
         while (navigatable.hasMorePages()) {
             System.out.println("\n--- Page " + navigatable.currentPage() + " of " + navigatable.maxPages() + " ---");
-            List<Customer> customers = navigatable.toObjectList(mapper);
+            List<Customer> customers = navigatable.toObjectList();
             customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         }
     }
@@ -130,14 +130,14 @@ public class NavigatableRecordStreamExample {
      *   <li>Reset iteration to the beginning</li>
      * </ul>
      */
-    private static void example2_PageJumping(Session session, TypeSafeDataSet<Customer> customerDataSet, 
+    private static void example2_PageJumping(Session session, TypedDataSet<Customer> customerDataSet, 
                                              CustomerMapper mapper) {
         System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║  Example 2: Page Jumping and Backward Navigation            ║");
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
         
-        RecordStream results = session.query(customerDataSet).execute();
-        NavigatableRecordStream navigatable = results.asNavigatableStream()
+        TypedRecordStream<Customer> results = session.query(customerDataSet).execute();
+        TypedNavigatableRecordStream<Customer> navigatable = results.asNavigatableStream()
             .pageSize(5)
             .sortBy("age", SortDir.SORT_DESC);
         
@@ -149,14 +149,14 @@ public class NavigatableRecordStreamExample {
         System.out.println("\nJumping directly to page " + targetPage + ":");
         navigatable.setPageTo(targetPage);
         System.out.println("--- Page " + navigatable.currentPage() + " ---");
-        List<Customer> customers = navigatable.toObjectList(mapper);
+        List<Customer> customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         
         // Jump backward to page 1
         System.out.println("\nJumping backward to page 1:");
         navigatable.setPageTo(1);
         System.out.println("--- Page " + navigatable.currentPage() + " ---");
-        customers = navigatable.toObjectList(mapper);
+        customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         
         // Jump forward to last page
@@ -164,7 +164,7 @@ public class NavigatableRecordStreamExample {
         System.out.println("\nJumping forward to last page (" + lastPage + "):");
         navigatable.setPageTo(lastPage);
         System.out.println("--- Page " + navigatable.currentPage() + " ---");
-        customers = navigatable.toObjectList(mapper);
+        customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         
         // Reset to beginning
@@ -174,7 +174,7 @@ public class NavigatableRecordStreamExample {
         while (navigatable.hasMorePages() && pageCount < 2) {
             pageCount++;
             System.out.println("--- Page " + navigatable.currentPage() + " ---");
-            customers = navigatable.toObjectList(mapper);
+            customers = navigatable.toObjectList();
             customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         }
     }
@@ -189,14 +189,14 @@ public class NavigatableRecordStreamExample {
      *   <li>Understand sort order precedence (first in list is primary)</li>
      * </ul>
      */
-    private static void example3_MultiColumnSorting(Session session, TypeSafeDataSet<Customer> customerDataSet, 
+    private static void example3_MultiColumnSorting(Session session, TypedDataSet<Customer> customerDataSet, 
                                                     CustomerMapper mapper) {
         System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║  Example 3: Multi-Column Sorting                            ║");
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
         
-        RecordStream results = session.query(customerDataSet).execute();
-        NavigatableRecordStream navigatable = results.asNavigatableStream().pageSize(8);
+        TypedRecordStream<Customer> results = session.query(customerDataSet).execute();
+        TypedNavigatableRecordStream<Customer> navigatable = results.asNavigatableStream().pageSize(8);
         
         // Sort by name (ascending) then by age (descending)
         System.out.println("\nSort by: 1) Name (ascending), 2) Age (descending)");
@@ -206,7 +206,7 @@ public class NavigatableRecordStreamExample {
         ));
         
         navigatable.hasMorePages();
-        List<Customer> customers = navigatable.toObjectList(mapper);
+        List<Customer> customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         
         // Sort by age (ascending) then by name (descending)
@@ -217,7 +217,7 @@ public class NavigatableRecordStreamExample {
         ));
         
         navigatable.hasMorePages();
-        customers = navigatable.toObjectList(mapper);
+        customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  Age: %2d  %-15s\n", c.getAge(), c.getName()));
     }
     
@@ -241,7 +241,7 @@ public class NavigatableRecordStreamExample {
      *   <li>No database queries during re-sorting</li>
      * </ul>
      */
-    private static void example4_DynamicResorting(Session session, TypeSafeDataSet<Customer> customerDataSet, 
+    private static void example4_DynamicResorting(Session session, TypedDataSet<Customer> customerDataSet, 
                                                    CustomerMapper mapper) {
         System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║  Example 4: Dynamic Re-sorting (No Database Queries)        ║");
@@ -249,8 +249,8 @@ public class NavigatableRecordStreamExample {
         
         // Initial query - this is the only database call
         System.out.println("STEP 1: Query database once");
-        RecordStream results = session.query(customerDataSet).limit(20).execute();
-        NavigatableRecordStream navigatable = results.asNavigatableStream()
+        TypedRecordStream<Customer> results = session.query(customerDataSet).limit(20).execute();
+        TypedNavigatableRecordStream<Customer> navigatable = results.asNavigatableStream()
             .pageSize(7);
         
         // First sort: by name then age (multi-column)
@@ -262,7 +262,7 @@ public class NavigatableRecordStreamExample {
         
         System.out.println("Page 1:");
         navigatable.hasMorePages();
-        List<Customer> customers = navigatable.toObjectList(mapper);
+        List<Customer> customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         
         // Re-sort by age only - NO DATABASE QUERY!
@@ -271,7 +271,7 @@ public class NavigatableRecordStreamExample {
         
         System.out.println("Page 1 (after re-sort):");
         navigatable.hasMorePages();
-        customers = navigatable.toObjectList(mapper);
+        customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  Age: %2d  %-15s\n", c.getAge(), c.getName()));
         
         // Re-sort by name descending - STILL NO DATABASE QUERY!
@@ -280,7 +280,7 @@ public class NavigatableRecordStreamExample {
         
         System.out.println("Page 1 (after second re-sort):");
         navigatable.hasMorePages();
-        customers = navigatable.toObjectList(mapper);
+        customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
         
         System.out.println("\nNote: Only 1 database query was made, all re-sorting happened in memory!");
@@ -299,14 +299,14 @@ public class NavigatableRecordStreamExample {
      *   <li>Combining pagination with filtering and sorting</li>
      * </ul>
      */
-    private static void example5_AdvancedPaginationScenarios(Session session, TypeSafeDataSet<Customer> customerDataSet, 
+    private static void example5_AdvancedPaginationScenarios(Session session, TypedDataSet<Customer> customerDataSet, 
                                                              CustomerMapper mapper) {
         System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║  Example 5: Advanced Pagination Scenarios                   ║");
         System.out.println("╚══════════════════════════════════════════════════════════════╝");
         
-        RecordStream results = session.query(customerDataSet).execute();
-        NavigatableRecordStream navigatable = results.asNavigatableStream()
+        TypedRecordStream<Customer> results = session.query(customerDataSet).execute();
+        TypedNavigatableRecordStream<Customer> navigatable = results.asNavigatableStream()
             .pageSize(6)
             .sortBy("name");
         
@@ -326,7 +326,7 @@ public class NavigatableRecordStreamExample {
                     // hasMorePages advances the page
                 }
                 System.out.println("--- Page " + navigatable.currentPage() + " ---");
-                List<Customer> customers = navigatable.toObjectList(mapper);
+                List<Customer> customers = navigatable.toObjectList();
                 customers.forEach(c -> System.out.printf("  %-15s Age: %2d\n", c.getName(), c.getAge()));
                 pagesViewed++;
             }
@@ -339,7 +339,7 @@ public class NavigatableRecordStreamExample {
         
         navigatable.hasMorePages();  // Start at page 1
         System.out.println("--- Page " + navigatable.currentPage() + " (after sort change) ---");
-        List<Customer> customers = navigatable.toObjectList(mapper);
+        List<Customer> customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  Age: %2d  %-15s\n", c.getAge(), c.getName()));
         
         // Scenario 3: Jump to middle page, then to last page
@@ -350,12 +350,12 @@ public class NavigatableRecordStreamExample {
             int midPage = Math.max(1, navigatable.maxPages() / 2);
             navigatable.setPageTo(midPage);
         System.out.println("--- Page " + navigatable.currentPage() + " (middle) ---");
-        customers = navigatable.toObjectList(mapper);
+        customers = navigatable.toObjectList();
         customers.forEach(c -> System.out.printf("  Age: %2d  %-15s\n", c.getAge(), c.getName()));
         
             navigatable.setPageTo(navigatable.maxPages());
             System.out.println("--- Page " + navigatable.currentPage() + " (last) ---");
-            customers = navigatable.toObjectList(mapper);
+            customers = navigatable.toObjectList();
             customers.forEach(c -> System.out.printf("  Age: %2d  %-15s\n", c.getAge(), c.getName()));
         }
     }
@@ -374,7 +374,7 @@ public class NavigatableRecordStreamExample {
      *   <li>Best practices for memory-efficient navigation</li>
      * </ul>
      */
-    private static void example6_LimitedRecordStream(Session session, TypeSafeDataSet<Customer> customerDataSet, 
+    private static void example6_LimitedRecordStream(Session session, TypedDataSet<Customer> customerDataSet, 
                                                      CustomerMapper mapper) {
         System.out.println("\n╔══════════════════════════════════════════════════════════════╗");
         System.out.println("║  Example 6: Memory-Efficient Navigation with Limits         ║");
@@ -382,8 +382,8 @@ public class NavigatableRecordStreamExample {
         
         // Query database but only load first 15 records into navigatable stream
         System.out.println("Querying database and loading first 15 records into memory");
-        RecordStream results = session.query(customerDataSet).execute();
-        NavigatableRecordStream navigatable = results.asNavigatableStream(15)  // Limit to 15 records
+        TypedRecordStream<Customer> results = session.query(customerDataSet).execute();
+        TypedNavigatableRecordStream<Customer> navigatable = results.asNavigatableStream(15)  // Limit to 15 records
             .pageSize(5)
             .sortBy("age", SortDir.SORT_DESC);
         
@@ -394,7 +394,7 @@ public class NavigatableRecordStreamExample {
         // Show all pages
         while (navigatable.hasMorePages()) {
             System.out.println("\n--- Page " + navigatable.currentPage() + " ---");
-            List<Customer> customers = navigatable.toObjectList(mapper);
+            List<Customer> customers = navigatable.toObjectList();
             customers.forEach(c -> System.out.printf("  Age: %2d  %-15s\n", c.getAge(), c.getName()));
         }
         
@@ -435,7 +435,7 @@ public class NavigatableRecordStreamExample {
                     Address.class, new AddressMapper()
             )));
             
-            TypeSafeDataSet<Customer> customerDataSet = TypeSafeDataSet.of("test", "navigatable_demo", Customer.class);
+            TypedDataSet<Customer> customerDataSet = TypedDataSet.of("test", "navigatable_demo", Customer.class);
             Session session = cluster.createSession(Behavior.DEFAULT);
             
             // Clean up any existing data
@@ -487,7 +487,7 @@ public class NavigatableRecordStreamExample {
             
             // Insert test data (using upsert to handle existing records)
             System.out.println("Inserting " + customers.size() + " customer records...");
-            RecordStream insertResults = session.upsert(customerDataSet)
+            TypedRecordStream<Customer> insertResults = session.upsert(customerDataSet)
                 .objects(customers)
                 .using(customerMapper)
                 .execute();
@@ -514,7 +514,7 @@ public class NavigatableRecordStreamExample {
             }
             
             // Verify data is queryable
-            RecordStream verifyResults = session.query(customerDataSet).execute();
+            TypedRecordStream<Customer> verifyResults = session.query(customerDataSet).execute();
             int verifyCount = 0;
             while (verifyResults.hasNext()) {
                 verifyResults.next();

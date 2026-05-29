@@ -305,6 +305,14 @@ public class ChainableQueryBuilder extends AbstractFilterableBuilder
         keys.addAll(Arrays.asList(moreKeys));
         return delete(keys);
     }
+
+    public ChainableNoBinsBuilder delete(TypedKey<?> key) {
+        return delete(key.getNativeKey());
+    }
+
+    public ChainableNoBinsBuilder deleteKeys(List<? extends TypedKey<?>> keys) {
+        return delete(Session.nativeKeysFromTyped(keys));
+    }
     
     /**
      * Chain a touch operation on a single key.

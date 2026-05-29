@@ -34,7 +34,8 @@ Work with lists, maps, and nested structures.
 Map Java objects to Aerospike records.
 
 - **[Creating Mappers](./object-mapping/creating-mappers.md)** - Implement RecordMapper
-- **[Using TypeSafeDataSets](./object-mapping/typesafe-datasets.md)** - Type-safe CRUD operations
+- **[Using TypedDataSets](./object-mapping/using-typesafe-datasets.md)** - Type-safe CRUD operations
+- **[Typed query and mapping](./object-mapping/typed-query-and-mapping.md)** - Typed streams, context, mixed batch reads
 - **[Custom Serialization](./object-mapping/custom-serialization.md)** - Advanced mapping patterns
 
 ## ⚙️ Configuration

@@ -107,7 +107,7 @@ All 5 core concept pages created (25,000+ words total):
 - **Sessions & Behavior** - Complete coverage of Session creation, Behavior configuration, YAML config, dynamic reloading
 - **DataSets & Keys** - All key types, batch operations, patterns, best practices
 - **Type-Safe Operations** - Fluent API, builders, method chaining, type safety benefits
-- **Object Mapping** - RecordMapper interface, TypeSafeDataSet, complex type handling, patterns
+- **Object Mapping** - RecordMapper interface, TypedDataSet, complex type handling, patterns
 
 ### 3. How-To Guides Section
 ✅ **Structure Complete with Key Content**
@@ -124,7 +124,7 @@ All 5 core concept pages created (25,000+ words total):
 - **Additional Guide Directories Created**:
   - Querying (simple, DSL, filtering, pagination, partitioning)
   - CDT operations (lists, maps, nested)
-  - Object mapping (mappers, TypeSafeDataSets, serialization)
+  - Object mapping (mappers, TypedDataSets, serialization)
   - Configuration (Java, YAML, durations, dynamic reloading)
   - Advanced features (transactions, info, monitoring)
   - Performance tuning (batching, optimization, pooling, timeouts)

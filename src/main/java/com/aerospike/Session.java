@@ -15,6 +15,7 @@ import com.aerospike.policy.Behavior;
 import com.aerospike.query.IndexBasedQueryBuilderInterface;
 import com.aerospike.query.KeyBasedQueryBuilderInterface;
 import com.aerospike.query.QueryBuilder;
+import com.aerospike.query.TypedQueryBuilder;
 
 public class Session {
     private final Cluster cluster;
@@ -64,6 +65,10 @@ public class Session {
     public void truncate(DataSet set) {
         this.client.truncate(null, set.getNamespace(), set.getSet(), null);
     }
+
+    public void truncate(TypedDataSet<?> set) {
+        this.client.truncate(null, set.getNamespace(), set.getSet(), null);
+    }
     
     public RecordMappingFactory getRecordMappingFactory() {
         return this.cluster.getRecordMappingFactory();
@@ -78,6 +83,17 @@ public class Session {
         }
         return keyList;
     }
+
+    /**
+     * Converts typed keys to native {@link Key} list (for batch APIs).
+     */
+    public static List<Key> nativeKeysFromTyped(List<? extends TypedKey<?>> keys) {
+        List<Key> out = new ArrayList<>(keys.size());
+        for (TypedKey<?> tk : keys) {
+            out.add(tk.getNativeKey());
+        }
+        return out;
+    }
     
     // --------------------------------------------
     // Query functionality
@@ -85,7 +101,7 @@ public class Session {
     public IndexBasedQueryBuilderInterface<QueryBuilder> query(DataSet dataSet) {
         return new QueryBuilder(this, dataSet);
     }
-
+    
     public KeyBasedQueryBuilderInterface<QueryBuilder> query(Key key) {
         return new QueryBuilder(this, key);
     }
@@ -102,6 +118,36 @@ public class Session {
     
     public KeyBasedQueryBuilderInterface<QueryBuilder> query(List<Key> keyList) {
         return new QueryBuilder(this, keyList);
+    }
+
+    public <T> TypedQueryBuilder<T> query(TypedDataSet<T> dataSet) {
+        return new TypedQueryBuilder<>(this, dataSet);
+    }
+
+    public <T> TypedQueryBuilder<T> query(TypedKey<T> key) {
+        return new TypedQueryBuilder<>(this, key);
+    }
+
+    public <T> TypedQueryBuilder<T> queryTypedKeys(List<TypedKey<T>> typedKeys) {
+        return new TypedQueryBuilder<>(this, typedKeys);
+    }
+
+    @SafeVarargs
+    public final <T> TypedQueryBuilder<T> query(TypedKey<T> key1, TypedKey<T> key2, TypedKey<T>... moreKeys) {
+        List<TypedKey<T>> list = new ArrayList<>();
+        list.add(key1);
+        list.add(key2);
+        for (TypedKey<T> k : moreKeys) {
+            list.add(k);
+        }
+        return new TypedQueryBuilder<>(this, list);
+    }
+
+    /**
+     * Starts a heterogeneous typed batch read: one server round-trip, results split per {@link MixedTypedBatchReadBuilder#segment}.
+     */
+    public MixedTypedBatchReadBuilder mixedRead() {
+        return new MixedTypedBatchReadBuilder(this);
     }
     
     // -------------------
@@ -140,6 +186,14 @@ public class Session {
     public ChainableOperationBuilder insert(Key key1, Key key2, Key... keys) {
         return new ChainableOperationBuilder(this, OpType.INSERT).init(buildKeyList(key1, key2, keys), OpType.INSERT);
     }
+
+    public <T> ChainableOperationBuilder insert(TypedKey<T> key) {
+        return insert(key.getNativeKey());
+    }
+
+    public <T> ChainableOperationBuilder insertKeys(List<TypedKey<T>> keys) {
+        return insert(nativeKeysFromTyped(keys));
+    }
     
     /**
      * Begin an update operation.
@@ -160,6 +214,14 @@ public class Session {
      */
     public ChainableOperationBuilder update(Key key1, Key key2, Key... keys) {
         return new ChainableOperationBuilder(this, OpType.UPDATE).init(buildKeyList(key1, key2, keys), OpType.UPDATE);
+    }
+
+    public <T> ChainableOperationBuilder update(TypedKey<T> key) {
+        return update(key.getNativeKey());
+    }
+
+    public <T> ChainableOperationBuilder updateKeys(List<TypedKey<T>> keys) {
+        return update(nativeKeysFromTyped(keys));
     }
     
     /**
@@ -182,6 +244,14 @@ public class Session {
     public ChainableOperationBuilder upsert(Key key1, Key key2, Key... keys) {
         return new ChainableOperationBuilder(this, OpType.UPSERT).init(buildKeyList(key1, key2, keys), OpType.UPSERT);
     }
+
+    public <T> ChainableOperationBuilder upsert(TypedKey<T> key) {
+        return upsert(key.getNativeKey());
+    }
+
+    public <T> ChainableOperationBuilder upsertKeys(List<TypedKey<T>> keys) {
+        return upsert(nativeKeysFromTyped(keys));
+    }
     
     /**
      * Begin a replace operation.
@@ -202,6 +272,14 @@ public class Session {
      */
     public ChainableOperationBuilder replace(Key key1, Key key2, Key... keys) {
         return new ChainableOperationBuilder(this, OpType.REPLACE).init(buildKeyList(key1, key2, keys), OpType.REPLACE);
+    }
+
+    public <T> ChainableOperationBuilder replace(TypedKey<T> key) {
+        return replace(key.getNativeKey());
+    }
+
+    public <T> ChainableOperationBuilder replaceKeys(List<TypedKey<T>> keys) {
+        return replace(nativeKeysFromTyped(keys));
     }
     
     /**
@@ -228,6 +306,14 @@ public class Session {
                 .touch(keys);
     }
 
+    public <T> ChainableNoBinsBuilder touch(TypedKey<T> key) {
+        return touch(key.getNativeKey());
+    }
+
+    public <T> ChainableNoBinsBuilder touchKeys(List<TypedKey<T>> keys) {
+        return touch(nativeKeysFromTyped(keys));
+    }
+
     /**
      * Begin an exists operation. Chainable with other operations.
      */
@@ -250,6 +336,14 @@ public class Session {
     public ChainableNoBinsBuilder exists(List<Key> keys) {
         return new ChainableNoBinsBuilder(this, new java.util.ArrayList<>(), null, getCurrentTransaction())
                 .exists(keys);
+    }
+
+    public <T> ChainableNoBinsBuilder exists(TypedKey<T> key) {
+        return exists(key.getNativeKey());
+    }
+
+    public <T> ChainableNoBinsBuilder existsKeys(List<TypedKey<T>> keys) {
+        return exists(nativeKeysFromTyped(keys));
     }
     
     /**
@@ -276,30 +370,26 @@ public class Session {
                 .delete(keys);
     }
 
+    public <T> ChainableNoBinsBuilder delete(TypedKey<T> key) {
+        return delete(key.getNativeKey());
+    }
+
+    public <T> ChainableNoBinsBuilder deleteKeys(List<TypedKey<T>> keys) {
+        return delete(nativeKeysFromTyped(keys));
+    }
+
     // --------------------------------
     // Object mapping functionality
     // --------------------------------
-    public OperationObjectBuilder insert(DataSet dataSet) {
-        return new OperationObjectBuilder(this, dataSet, OpType.INSERT);
-    }
-    
-    public <T> OperationObjectBuilder<T> insert(TypeSafeDataSet<T> dataSet) {
+    public <T> OperationObjectBuilder<T> insert(TypedDataSet<T> dataSet) {
         return new OperationObjectBuilder<T>(this, dataSet, OpType.INSERT);
     }
     
-    public OperationObjectBuilder upsert(DataSet dataSet) {
-        return new OperationObjectBuilder(this, dataSet, OpType.UPSERT);
-    }
-    
-    public <T> OperationObjectBuilder<T> upsert(TypeSafeDataSet<T> dataSet) {
+    public <T> OperationObjectBuilder<T> upsert(TypedDataSet<T> dataSet) {
         return new OperationObjectBuilder<T>(this, dataSet, OpType.UPSERT);
     }
     
-    public OperationObjectBuilder update(DataSet dataSet) {
-        return new OperationObjectBuilder(this, dataSet, OpType.UPDATE);
-    }
-    
-    public <T> OperationObjectBuilder<T> update(TypeSafeDataSet<T> dataSet) {
+    public <T> OperationObjectBuilder<T> update(TypedDataSet<T> dataSet) {
         return new OperationObjectBuilder<T>(this, dataSet, OpType.UPDATE);
     }
     

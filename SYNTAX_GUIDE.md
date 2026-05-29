@@ -7,7 +7,7 @@ This client follows a **fluent, method-chaining style** that emphasizes **readab
 - **Builder pattern everywhere**: Almost every operation returns a builder for continued configuration
 - **Action-first semantics**: Operations start with verbs (`query`, `upsert`, `insert`, `delete`)
 - **Progressive disclosure**: Simple cases are simple; complex features are discovered through chaining
-- **Type safety through generics**: `TypeSafeDataSet<T>`, `OperationObjectBuilder<T>` prevent runtime errors
+- **Type safety through generics**: `TypedDataSet<T>`, `OperationObjectBuilder<T>` prevent runtime errors
 - **Consistent termination**: All builder chains end with `.execute()` or `.connect()`
 
 ---
@@ -44,7 +44,7 @@ session.upsert(key)          // EntryPoint → Action
 | **Verb-first actions** | Database operations | `query()`, `upsert()`, `insert()`, `update()`, `delete()`, `touch()`, `exists()` |
 | **with-prefix** | Additive configuration | `withNativeCredentials()`, `withLogLevel()`, `withNoBins()`, `withNoChangeInExpiration()` |
 | **on-prefix** | Targeting/scoping | `onMapKey()`, `onListIndex()`, `onPartition()`, `onAvailablityModeReads()` |
-| **of-prefix** | Factory methods | `DataSet.of()`, `TypeSafeDataSet.of()` |
+| **of-prefix** | Factory methods | `DataSet.of()`, `TypedDataSet.of()` |
 | **ensure-prefix** | Preconditions | `ensureGenerationIs()` |
 | **using-prefix** | Dependency injection | `using(RecordMapper)`, `usingServicesAlternate()` |
 | **get-prefix** | Accessors | `getNamespace()`, `getSet()`, `getBinNames()` |
@@ -84,7 +84,7 @@ Session session = cluster.createSession(Behavior.DEFAULT);
 ```java
 // Pattern: DataSet.of(namespace, set)
 DataSet users = DataSet.of("production", "users");
-TypeSafeDataSet<Customer> customers = TypeSafeDataSet.of("production", "customers", Customer.class);
+TypedDataSet<Customer> customers = TypedDataSet.of("production", "customers", Customer.class);
 
 // Pattern: dataset.id(value) | dataset.ids(values...)
 Key userKey = users.id("user123");           // String key
@@ -121,7 +121,7 @@ session.upsert(customerDataSet)
 ```
 
 **Key Observations:**
-- CRUD verbs: `insertInto()`, `upsert()`, `update()`, `replace()`, `delete()`
+- CRUD verbs: `insert()`, `upsert()`, `update()`, `replace()`, `delete()`
 - `bin(name)` returns `BinBuilder` with type-specific setters
 - Expiration: `expireRecordAfter()`, `expireRecordAt()`, `neverExpire()`
 - Generation checks: `ensureGenerationIs()`
@@ -248,11 +248,11 @@ String result = session.doInTransaction(txSession -> {
 
 | Category | Pattern | Examples |
 |----------|---------|----------|
-| **CRUD Operations** | Action verb | `insertInto()`, `upsert()`, `update()`, `replace()`, `delete()`, `touch()`, `exists()` |
+| **CRUD Operations** | Action verb | `insert()`, `upsert()`, `update()`, `replace()`, `delete()`, `touch()`, `exists()` |
 | **Queries** | `query()` | Always `query()`, never `read()` or `get()` |
 | **Configuration** | `with` prefix | `withNativeCredentials()`, `withLogLevel()`, `withNoBins()` |
 | **Targeting** | `on` prefix | `onMapKey()`, `onListIndex()`, `onPartition()` |
-| **Factories** | `of()` | `DataSet.of()`, `TypeSafeDataSet.of()` |
+| **Factories** | `of()` | `DataSet.of()`, `TypedDataSet.of()` |
 | **Termination** | `execute()` or `connect()` | Terminal operations that trigger side effects |
 | **Sub-navigation** | Noun without verb | `.bin("name")`, `.bins("a", "b")` |
 | **Conditions** | `where()` or `when()` | Filtering and predicates |
@@ -303,7 +303,7 @@ The API heavily uses method overloading for:
 | Issue | Current State | Recommendation |
 |-------|---------------|----------------|
 | **Typo in method name** | `preferringRacks()` (correct) vs internal field `preferrredRacks` (typo with triple 'r') | Rename internal field to `preferredRacks` |
-| **Inconsistent verb forms** | `insertInto()` vs `upsert()` vs `update()` | Consider standardizing to `insert()`, `upsert()`, `update()` (remove "Into" suffix for consistency) |
+| **Inconsistent verb forms** | Historical `insertInto()` vs `upsert()` vs `update()` | Prefer `insert()` for new examples; `insertInto` removed from the API |
 | **Per-node suffix variation** | Consistently uses `...PerNode()` suffix | ✅ Good - maintain this |
 | **Mixed singular/plural** | `object()` vs `objects()` both present | ✅ Good - intentional for single vs batch |
 
@@ -444,7 +444,7 @@ Future APIs should continue the type safety patterns:
 ```java
 // Good: Enforce correct usage at compile time
 DataSet users = DataSet.of("test", "users");
-TypeSafeDataSet<Customer> customers = TypeSafeDataSet.of("test", "customers", Customer.class);
+TypedDataSet<Customer> customers = TypedDataSet.of("test", "customers", Customer.class);
 
 // Prevent:
 // session.upsert(customers).object(new Order()); // Compile error - wrong type!

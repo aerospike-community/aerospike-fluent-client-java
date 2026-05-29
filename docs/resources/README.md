@@ -26,7 +26,7 @@ Release notes, compatibility information, and additional resources for the Aeros
 - ✨ DSL for intuitive query building
 - ✨ Object mapping framework (RecordMapper)
 - ✨ YAML-based configuration with dynamic reloading
-- ✨ TypeSafeDataSet for POJO operations
+- ✨ TypedDataSet for POJO operations
 - ✨ TransactionalSession with automatic retry
 - ✨ InfoCommands for high-level cluster monitoring
 - ✨ Automatic index discovery (IndexesMonitor)
@@ -231,7 +231,7 @@ try (Cluster cluster = new ClusterDefinition("localhost", 3000).connect()) {
 - Provides key generation methods
 - Immutable and reusable
 
-**TypeSafeDataSet**
+**TypedDataSet**
 - DataSet bound to a Java class
 - Enables object-oriented operations
 - Used with RecordMapper

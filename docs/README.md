@@ -45,7 +45,8 @@ Step-by-step instructions for common tasks.
 
 #### Object Mapping
 - **[Creating Mappers](./guides/object-mapping/creating-mappers.md)** - RecordMapper implementation
-- **[Using TypeSafeDataSets](./guides/object-mapping/typesafe-datasets.md)** - Type-safe operations
+- **[Using TypedDataSets](./guides/object-mapping/using-typesafe-datasets.md)** - Type-safe operations
+- **[Typed query and mapping](./guides/object-mapping/typed-query-and-mapping.md)** - Streams, `RecordReadContext`, `mixedRead()`
 
 #### Configuration
 - **[Behavior Configuration (Java)](./guides/configuration/behavior-java.md)** - Programmatic configuration
@@ -80,7 +81,7 @@ Detailed API documentation for all classes and methods.
 
 #### Data Operations
 - **[DataSet](./api/dataset.md)**
-- **[TypeSafeDataSet](./api/operations/typesafe-dataset.md)**
+- **[TypedDataSet](./api/operations/typed-dataset.md)**
 - **[OperationBuilder](./api/operation-builder.md)**
 - **[QueryBuilder](./api/query-builder.md)**
 - **[RecordStream](./api/operations/record-stream.md)**

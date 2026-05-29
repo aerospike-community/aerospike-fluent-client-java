@@ -12,7 +12,7 @@ This section provides a detailed reference for the core classes and interfaces i
 
 ### Data and Query Builders
 - **[DataSet](./dataset.md)**: A factory for creating keys for a specific namespace and set.
-- **[TypeSafeDataSet](./typesafe-dataset.md)**: A type-safe version of `DataSet` for working with Java objects.
+- **[TypedDataSet](./operations/typed-dataset.md)**: A type-safe version of `DataSet` for working with Java objects.
 - **[OperationBuilder](./operation-builder.md)**: The fluent builder for constructing create, update, and delete operations.
 - **[QueryBuilder](./query-builder.md)**: The fluent builder for constructing read, scan, and query operations.
 

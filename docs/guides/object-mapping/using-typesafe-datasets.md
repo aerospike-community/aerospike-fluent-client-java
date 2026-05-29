@@ -1,11 +1,13 @@
-# Using TypeSafeDataSets
+# Using TypedDataSets
 
-Learn how to perform type-safe, object-oriented database operations with `TypeSafeDataSet`.
+Learn how to perform type-safe, object-oriented database operations with `TypedDataSet`.
+
+For the full typed query / stream / navigable / heterogeneous batch picture, see **[Typed query and mapping](./typed-query-and-mapping.md)**.
 
 ## Goal
 
 By the end of this guide, you'll know how to:
-- Create and use a `TypeSafeDataSet` for your Java objects
+- Create and use a `TypedDataSet` for your Java objects
 - Perform type-safe CRUD (Create, Read, Update, Delete) operations
 - Convert query results directly into lists of your objects
 - Leverage your `RecordMapper` for seamless object persistence
@@ -18,9 +20,9 @@ By the end of this guide, you'll know how to:
 
 ---
 
-## What is `TypeSafeDataSet`?
+## What is `TypedDataSet`?
 
-`TypeSafeDataSet` is a wrapper around `DataSet` that is strongly typed to your Java domain object. It acts as the primary entry point for all object-based database operations.
+`TypedDataSet` is a wrapper around `DataSet` that is strongly typed to your Java domain object. It acts as the primary entry point for all object-based database operations.
 
 ### Standard `DataSet` (Not Type-Safe)
 
@@ -33,14 +35,14 @@ session.upsert(users.id("alice"))
     .execute();
 ```
 
-### `TypeSafeDataSet` (Type-Safe)
+### `TypedDataSet` (Type-Safe)
 
 ```java
 // Works directly with your User objects
-TypeSafeDataSet<User> users = TypeSafeDataSet.of("test", "users", User.class);
+TypedDataSet<User> users = TypedDataSet.of("test", "users", User.class);
 
 User alice = new User("alice", "Alice", 30);
-session.insertInto(users)
+session.insert(users)
     .object(alice)
     .execute();
 ```
@@ -70,12 +72,12 @@ cluster.setRecordMappingFactory(new DefaultRecordMappingFactory(Map.of(
 )));
 ```
 
-### 2. Create a `TypeSafeDataSet`
+### 2. Create a `TypedDataSet`
 
 Instantiate it by providing the namespace, set name, and your POJO's `Class` object.
 
 ```java
-TypeSafeDataSet<User> users = TypeSafeDataSet.of("test", "users", User.class);
+TypedDataSet<User> users = TypedDataSet.of("test", "users", User.class);
 ```
 
 ---
@@ -84,13 +86,13 @@ TypeSafeDataSet<User> users = TypeSafeDataSet.of("test", "users", User.class);
 
 ### Create (Insert/Upsert) an Object
 
-Use `insertInto()` or `upsert()` with the `.object()` method. The client will automatically use your registered mapper to convert the object to Aerospike bins.
+Use `insert()` / `upsert()` with the `.object()` method. The client will automatically use your registered mapper to convert the object to Aerospike bins.
 
 ```java
 User newUser = new User("bob-456", "Bob", 45);
 
 // Create a new record from the object
-session.insertInto(users)
+session.insert(users)
     .object(newUser)
     .execute();
 ```
@@ -105,41 +107,36 @@ List<User> newUsers = List.of(
     new User("diana-012", "Diana", 52)
 );
 
-session.insertInto(users)
+session.insert(users)
     .objects(newUsers)
     .execute();
 ```
 
-### Read an Object
+### Read an object
 
-Query by key and use `.toObjectList()` to deserialize the results back into your POJOs.
+Query by key and use `.toObjectList()` with **no arguments** so the client uses your registered `RecordMapper` and passes a `RecordReadContext` (session + type) into the mapper.
 
 ```java
-// Get the UserMapper instance
-UserMapper userMapper = (UserMapper) cluster
-    .getRecordMappingFactory()
-    .getMapper(User.class);
-
-// Find a single user by their ID
+// Find a single user by their ID (TypedRecordStream<User>)
 Optional<User> user = session.query(users.id("bob-456"))
     .execute()
-    .toObjectList(userMapper)
+    .toObjectList()
     .stream()
     .findFirst();
 
 user.ifPresent(u -> System.out.println("Found user: " + u.getName()));
 ```
-> **Note**: You must provide the mapper instance to `.toObjectList()` for deserialization.
 
-### Read Multiple Objects
+You can still call `.toObjectList(userMapper)` when you need an explicit mapper instance.
 
-The same `.toObjectList()` method works for batch reads and queries.
+### Read multiple objects
+
+Use `queryTypedKeys` for a list of `TypedKey<User>` (same entity type), or pass multiple keys as varargs when convenient:
 
 ```java
-// Find multiple users by their IDs
-List<User> userList = session.query(users.ids("charlie-789", "diana-012"))
+List<User> userList = session.queryTypedKeys(users.ids("charlie-789", "diana-012"))
     .execute()
-    .toObjectList(userMapper);
+    .toObjectList();
 ```
 
 ### Update an Object
@@ -170,17 +167,17 @@ boolean deleted = session.delete(users.id(userToDelete)).execute();
 
 ---
 
-## Type-Safe Queries
+## Type-safe queries
 
-You can combine `TypeSafeDataSet` with `where()` clauses and deserialize the results.
+You can combine `TypedDataSet` with `where()` clauses and deserialize the results.
 
 ```java
 // Find all users over 40
-RecordStream results = session.query(users)
+TypedRecordStream<User> results = session.query(users)
     .where(longBin("age").gt(40))
     .execute();
-    
-List<User> usersOver40 = results.toObjectList(userMapper);
+
+List<User> usersOver40 = results.toObjectList();
 
 usersOver40.forEach(u -> System.out.println(u.getName()));
 ```
@@ -189,7 +186,7 @@ usersOver40.forEach(u -> System.out.println(u.getName()));
 
 ## Complete Example: `UserService`
 
-This example shows a simple service layer that uses `TypeSafeDataSet` to abstract away the database logic.
+This example shows a simple service layer that uses `TypedDataSet` to abstract away the database logic.
 
 ```java
 import java.util.List;
@@ -197,19 +194,11 @@ import java.util.Optional;
 
 public class UserService {
     private final Session session;
-    private final TypeSafeDataSet<User> users;
-    private final UserMapper userMapper;
-
+    private final TypedDataSet<User> users;
     public UserService(Cluster cluster, Session session) {
         this.session = session;
-        this.users = TypeSafeDataSet.of("app", "users", User.class);
-        
-        // It's good practice to get the mapper from the factory
-        this.userMapper = (UserMapper) cluster
-            .getRecordMappingFactory()
-            .getMapper(User.class);
-            
-        if (this.userMapper == null) {
+        this.users = TypedDataSet.of("app", "users", User.class);
+        if (cluster.getRecordMappingFactory().getMapper(User.class) == null) {
             throw new IllegalStateException("UserMapper not registered!");
         }
     }
@@ -225,7 +214,7 @@ public class UserService {
     public Optional<User> findById(String userId) {
         return session.query(users.id(userId))
             .execute()
-            .toObjectList(userMapper)
+            .toObjectList()
             .stream()
             .findFirst();
     }
@@ -234,7 +223,7 @@ public class UserService {
         return session.query(users)
             .where(longBin("age").eq(age))
             .execute()
-            .toObjectList(userMapper);
+            .toObjectList();
     }
     
     public boolean delete(User user) {
@@ -249,21 +238,21 @@ public class UserService {
 
 ### ✅ DO
 
-**Instantiate `TypeSafeDataSet` once and reuse it.**
+**Instantiate `TypedDataSet` once and reuse it.**
 It's a lightweight, thread-safe object.
 
 **Retrieve your mapper from the `RecordMappingFactory`.**
 This ensures you're using the same instance that the client is configured with.
 
-**Use `TypeSafeDataSet` for all object-related operations.**
+**Use `TypedDataSet` for all object-related operations.**
 It improves readability and reduces the chance of errors.
 
 ### ❌ DON'T
 
 **Don't forget to register the mapper.**
-If you do, creating a `TypeSafeDataSet` is fine, but any operation that relies on the mapper (like `.object()` or `.toObjectList()`) will fail.
+If you do, creating a `TypedDataSet` is fine, but any operation that relies on the mapper (like `.object()` or `.toObjectList()`) will fail.
 
-**Don't mix `TypeSafeDataSet<T>` with a `RecordMapper<U>` for a different type.**
+**Don't mix `TypedDataSet<T>` with a `RecordMapper<U>` for a different type.**
 This will lead to casting exceptions and runtime errors.
 
 ---
@@ -272,6 +261,7 @@ This will lead to casting exceptions and runtime errors.
 
 You've now mastered object mapping!
 
+- **[Typed query and mapping](./typed-query-and-mapping.md)** — streams, `RecordReadContext`, navigable typed streams, `mixedRead()`.
 - **[Behavior Configuration (Java)](../configuration/behavior-java.md)** - Learn how to control policies like timeouts and retries.
 - **[YAML Configuration](../configuration/yaml-configuration.md)** - Configure client behavior externally using YAML files.
 

@@ -1,8 +1,8 @@
 package com.aerospike.dslobjects.stub;
 
 import com.aerospike.client.exp.Exp;
-import com.aerospike.dslobjects.Index;
 import com.aerospike.dsl.ParseResult;
+import com.aerospike.dslobjects.Index;
 
 /**
  * TEMPORARY STUB - Replace when library is fixed

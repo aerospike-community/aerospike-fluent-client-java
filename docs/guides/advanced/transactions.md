@@ -110,13 +110,13 @@ public UserProfile createNewUser(String username, String email) {
         }
 
         // 2. Create the user record
-        tx.insertInto(userKey)
+        tx.insert(userKey)
             .bin("email").setTo(email)
             .bin("createdAt").setTo(System.currentTimeMillis())
             .execute();
             
         // 3. Create a corresponding profile record
-        tx.insertInto(profiles.id(username))
+        tx.insert(profiles.id(username))
             .bin("bio").setTo("New user profile")
             .execute();
 
