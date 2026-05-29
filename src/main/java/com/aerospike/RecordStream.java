@@ -21,7 +21,7 @@ import com.aerospike.client.query.Statement;
 import com.aerospike.query.RecordStreamImpl;
 import com.aerospike.query.SingleItemRecordStream;
 
-public class RecordStream implements Iterator<RecordResult>, Closeable {
+public class RecordStream implements Iterator<RecordResult>, Iterable<RecordResult>, Closeable {
     private final RecordStreamImpl impl;
     public RecordStream() {impl = null;}
     
@@ -110,6 +110,11 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
     @Override
     public RecordResult next() {
         return impl == null ? null : impl.next();
+    }
+
+    @Override
+    public Iterator<RecordResult> iterator() {
+        return this;
     }
 
     /**
@@ -240,7 +245,8 @@ public class RecordStream implements Iterator<RecordResult>, Closeable {
      * Iterate through each record in the record stream, invoking the lambda on each one. This method will consume the stream. 
      * @param consumer The lambda to invoke with the item being passed as the parameter
      */
-    public void forEach(Consumer<RecordResult> consumer) {
+    @Override
+    public void forEach(Consumer<? super RecordResult> consumer) {
         while (hasNext()) {
             consumer.accept(next());
         }

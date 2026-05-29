@@ -15,6 +15,7 @@ import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
+import com.aerospike.client.task.ExecuteTask;
 import com.aerospike.policy.Behavior;
 
 public class Example2_NewStyle {
@@ -50,7 +51,10 @@ public class Example2_NewStyle {
             
             customer.ifPresent(cust -> {
                 Record custRec = cust.recordOrThrow();
-                RecordStream accts = session.query(accountDataSet.ids(custRec.getList("acctIds"))).execute();
+                RecordStream accts = session.query(accountDataSet.ids(custRec.getList("acctIds")))
+                        .where("$.balance > 500 AND $.status == 'ACTIVE'")
+                        .execute();
+                
                 int sum = accts.stream().mapToInt(keyRecord -> keyRecord.recordOrThrow().getInt("balance")).sum();
                 
                 if (sum > 10000) {
@@ -61,6 +65,21 @@ public class Example2_NewStyle {
                 }
             });
             System.out.println(session.query(customerDataSet.id(1)).execute().getFirst());
+            
+            ExecuteTask task = session.backgroundTask().update(customerDataSet)
+                .bin("touched").setTo(true)
+                .execute();
+            task.waitTillComplete();
+            
+            session
+                .update(customerDataSet.ids(1,3,4))
+                    .bin("balance").add(100)
+                    .bin("status").setTo("PAID")
+                .delete(customerDataSet.ids(7,8,9))
+                .upsert(accountDataSet.id(100))
+                    .bin("ledger").add(3 * 100)
+                .execute();
+                    
         }
     }
 }

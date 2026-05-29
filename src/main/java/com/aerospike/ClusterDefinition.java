@@ -1,5 +1,6 @@
 package com.aerospike;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -13,6 +14,7 @@ import com.aerospike.client.Log.Level;
 import com.aerospike.client.policy.AuthMode;
 import com.aerospike.client.policy.ClientPolicy;
 import com.aerospike.client.policy.TlsPolicy;
+import com.aerospike.policy.Behavior;
 
 /**
  * Builder class for configuring and creating Aerospike cluster connections.
@@ -43,7 +45,8 @@ public class ClusterDefinition {
     private Level logLevel = Level.WARN;
     TlsBuilder tlsBuilder = null;
     SystemSettings systemSettings = null;  // Level 2: Code-provided settings
-    
+    private static final String CONFIG_PATH_ENV = "AEROSPIKE_CLIENT_CONFIG_URL";
+
     private final Host[] hosts;
     
     /**
@@ -362,12 +365,30 @@ public class ClusterDefinition {
      * @see Cluster#close()
      */
     public Cluster connect() {
+        String configPath = System.getenv(CONFIG_PATH_ENV);
+        try {
+            if (configPath != null) {
+                Behavior.startMonitoring(configPath);
+            }
+        }
+        catch (IOException ioe) {
+            Log.error("Configuration file %s was specified in environment variable %s, but parsing this file gave an exception: %s\n".formatted(
+                    configPath,
+                    CONFIG_PATH_ENV,
+                    ioe.getMessage()));
+            ioe.printStackTrace();
+        }
+        
         ClientPolicy policy = getPolicy();
         
         // Apply system settings to policy (4-level hierarchy)
         SystemSettings effectiveSettings = SystemSettingsRegistry.getInstance()
             .getEffectiveSettings(clusterName, systemSettings);
         effectiveSettings.applyTo(policy);
+        
+        if (Log.debugEnabled()) {
+            Log.debug("System Settings: " + effectiveSettings);
+        }
         
         Host[] effectiveHosts = getEffectiveHosts();
         IAerospikeClient client = new AerospikeClient(policy, effectiveHosts);

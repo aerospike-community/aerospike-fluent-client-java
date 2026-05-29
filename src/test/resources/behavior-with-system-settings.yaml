@@ -1,72 +1,122 @@
+# Example YAML configuration demonstrating both behaviors and system settings
+# This file shows the complete structure expected by BehaviorYamlConfig.java
+
 behaviors:
   - name: production
     parent: DEFAULT
+    sendKey: true
+    useCompression: true
     
     # Global settings for all operations
     allOperations:
-      abandonCallAfter: 5s
+      abandonCallAfter: 10s
+      delayBetweenRetries: 50ms
       maximumNumberOfCallAttempts: 3
-    
-    # System - Transaction Verification settings
-    systemTxnVerify:
-      consistency: LINEARIZE
       replicaOrder: MASTER
-      maximumNumberOfCallAttempts: 10
-      waitForCallToComplete: 5s
-      abandonCallAfter: 15s
-      delayBetweenRetries: 2s
+      waitForCallToComplete: 1s
+      waitForConnectionToComplete: 500ms
+      waitForSocketResponseAfterCallFails: 100ms
     
-    # System - Transaction Rollback settings
-    systemTxnRoll:
-      replicaOrder: MASTER
-      maximumNumberOfCallAttempts: 8
-      waitForCallToComplete: 4s
-      abandonCallAfter: 12s
-      delayBetweenRetries: 1s
+    # Retryable write operations
+    retryableWrites:
+      useDurableDelete: false
+      maximumNumberOfCallAttempts: 5
+      delayBetweenRetries: 100ms
     
-    # System - Connection Pool settings
-    systemConnections:
-      minimumConnectionsPerNode: 10
-      maximumConnectionsPerNode: 200
-      maximumSocketIdleTime: 120s
+    # Non-retryable write operations
+    nonRetryableWrites:
+      useDurableDelete: true
+      maximumNumberOfCallAttempts: 1
     
-    # System - Circuit Breaker settings
-    systemCircuitBreaker:
-      numTendIntervalsInErrorWindow: 2
-      maximumErrorsInErrorWindow: 50
-    
-    # System - Cluster Refresh settings
-    systemRefresh:
-      tendInterval: 2s
-    
-    # Batch operations
+    # Batch read operations
     batchReads:
       maxConcurrentServers: 8
       allowInlineMemoryAccess: true
+      allowInlineSsdAccess: false
     
-    # Writes
-    retryableWrites:
-      maximumNumberOfCallAttempts: 5
-      useDurableDelete: false
+    # Batch write operations
+    batchWrites:
+      maxConcurrentServers: 4
+      allowInlineMemoryAccess: true
+      allowInlineSsdAccess: false
+    
+    # Query operations
+    query:
+      recordQueueSize: 5000
+      maxConcurrentServers: 4
+      maximumNumberOfCallAttempts: 3
+    
+    # Info operations
+    info:
+      abandonCallAfter: 5s
 
   - name: highLoad
     parent: production
     
-    # Override connection pool for high load scenarios
-    systemConnections:
-      minimumConnectionsPerNode: 20
-      maximumConnectionsPerNode: 500
-    
-    # More aggressive circuit breaker
-    systemCircuitBreaker:
-      numTendIntervalsInErrorWindow: 3
-      maximumErrorsInErrorWindow: 100
-    
-    # More frequent cluster refresh
-    systemRefresh:
-      tendInterval: 500ms
+    # Override for high load scenarios
+    allOperations:
+      abandonCallAfter: 15s
+      maximumNumberOfCallAttempts: 5
     
     # Higher concurrency for batch operations
     batchReads:
       maxConcurrentServers: 16
+      allowInlineMemoryAccess: true
+    
+    batchWrites:
+      maxConcurrentServers: 12
+    
+    # Larger queue for queries
+    query:
+      recordQueueSize: 20000
+      maxConcurrentServers: 8
 
+  - name: development
+    parent: DEFAULT
+    sendKey: false
+    useCompression: false
+    
+    allOperations:
+      abandonCallAfter: 5s
+      maximumNumberOfCallAttempts: 1
+      waitForCallToComplete: 2s
+
+# System settings - applied at the cluster/client level
+system:
+  # Default settings applied to all clusters unless overridden
+  default:
+    connections:
+      minimumConnectionsPerNode: 10
+      maximumConnectionsPerNode: 200
+      maximumSocketIdleTime: 120s
+    
+    circuitBreaker:
+      numTendIntervalsInErrorWindow: 2
+      maximumErrorsInErrorWindow: 50
+    
+    refresh:
+      tendInterval: 1s
+
+  # Cluster-specific overrides
+  clusters:
+    production-cluster:
+      connections:
+        minimumConnectionsPerNode: 20
+        maximumConnectionsPerNode: 500
+        maximumSocketIdleTime: 180s
+      
+      circuitBreaker:
+        numTendIntervalsInErrorWindow: 3
+        maximumErrorsInErrorWindow: 100
+      
+      refresh:
+        tendInterval: 500ms
+    
+    staging-cluster:
+      connections:
+        minimumConnectionsPerNode: 5
+        maximumConnectionsPerNode: 100
+        maximumSocketIdleTime: 60s
+      
+      refresh:
+        tendInterval: 2s

@@ -1,15 +1,21 @@
 package com.example;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.aerospike.client.AerospikeClient;
+import com.aerospike.client.BatchDelete;
+import com.aerospike.client.BatchRecord;
+import com.aerospike.client.BatchWrite;
 import com.aerospike.client.Bin;
 import com.aerospike.client.IAerospikeClient;
 import com.aerospike.client.Key;
+import com.aerospike.client.Operation;
 import com.aerospike.client.Record;
 import com.aerospike.client.exp.Exp;
 import com.aerospike.client.policy.AuthMode;
 import com.aerospike.client.policy.BatchPolicy;
+import com.aerospike.client.policy.BatchWritePolicy;
 import com.aerospike.client.policy.ClientPolicy;
 import com.aerospike.client.policy.GenerationPolicy;
 import com.aerospike.client.policy.Policy;
@@ -17,6 +23,8 @@ import com.aerospike.client.policy.ReadModeSC;
 import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.Replica;
 import com.aerospike.client.policy.WritePolicy;
+import com.aerospike.client.query.Statement;
+import com.aerospike.client.task.ExecuteTask;
 
 public class Example2_OldStyle {
     public static void seed(IAerospikeClient client) {
@@ -90,6 +98,30 @@ public class Example2_OldStyle {
                 }
             }
             System.out.println(client.get(null, new Key("test", "customer", 1)));
+            
+            Statement stmt = new Statement();
+            stmt.setNamespace("test");
+            stmt.setSetName("customer");
+            ExecuteTask task = client.execute(null, stmt, Operation.put(new Bin("touched", true)));
+            task.waitTillComplete();
+            
+            List<BatchRecord> recs = new ArrayList<>();
+            for (int i: new int[] {1,3,4}) {
+                BatchWritePolicy bwp = new BatchWritePolicy();
+                bwp.recordExistsAction = RecordExistsAction.UPDATE_ONLY;
+                recs.add(new BatchWrite(bwp, new Key("test", "customer", i), Operation.array(
+                        Operation.add(new Bin("balance", 100)),
+                        Operation.put(new Bin("status", "PAID")))));
+            }
+            for (int i: new int[] {7,8,9}) {
+                recs.add(new BatchDelete(new Key("test", "customer", i)));
+            }
+            BatchWritePolicy bwp = new BatchWritePolicy();
+            bwp.recordExistsAction = RecordExistsAction.UPDATE;
+            recs.add(new BatchWrite(new Key("test", "account", 100), Operation.array(
+                        Operation.add(new Bin("ledger", 3 * 100))))
+            );
+            client.operate(null, recs);
         }
     }
 }
